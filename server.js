@@ -325,6 +325,7 @@ function migrateSchema() {
   ensureColumn('employees', 'contract_end', 'TEXT');
   db.prepare("UPDATE employees SET employment_type = 'Casual' WHERE employment_type = 'Temporary'").run();
   ensureColumn('employees', 'probation_end', 'TEXT');
+  ensureColumn('employees', 'leaving_on', 'TEXT');
   ensureColumn('employees', 'leave_entitlement', 'REAL');
   ensureColumn('employees', 'leave_taken', 'REAL');
   ensureColumn('employees', 'leave_start', 'TEXT');
@@ -376,6 +377,11 @@ function migrateSchema() {
   for (const column of ['department', 'position', 'bank_name', 'bank_branch', 'account_name', 'account_number', 'ssnit_number']) {
     ensureColumn('payroll_items', column, 'TEXT');
   }
+
+  for (const column of ['period_days', 'employed_days', 'paid_days', 'monthly_basic', 'monthly_housing', 'monthly_transport', 'monthly_other']) {
+    ensureColumn('payroll_items', column, 'REAL NOT NULL DEFAULT 0');
+  }
+  ensureColumn('payroll_items', 'proration_note', 'TEXT');
 
   ensureColumn('employees', 'leave_opening', 'REAL NOT NULL DEFAULT 0');
   if (!getSetting('leave_opening_migrated')) {
@@ -1131,6 +1137,7 @@ const EMPLOYEE_COLUMNS = {
   nationalIdNumber: 'national_id_number',
   employmentType: 'employment_type',
   joinedOn: 'joined_on',
+  leavingOn: 'leaving_on',
   contractEnd: 'contract_end',
   probationEnd: 'probation_end',
   status: 'status',
@@ -1209,6 +1216,7 @@ function readEmployeePayload(body) {
     nationalIdNumber: text('nationalIdNumber', 40, 'National ID number'),
     employmentType: text('employmentType', 30, 'Employment type'),
     joinedOn: date('joinedOn', 'joining date'),
+    leavingOn: date('leavingOn', 'leaving date'),
     contractEnd: date('contractEnd', 'contract end date'),
     probationEnd: date('probationEnd', 'probation end date'),
     status: body.status === 'Inactive' ? 'Inactive' : 'Active',
@@ -1262,6 +1270,9 @@ function readEmployeePayload(body) {
   if (payload.dob && payload.dob > todayIso()) errors.push('Date of birth cannot be in the future.');
   if (payload.joinedOn && payload.contractEnd && payload.contractEnd < payload.joinedOn) {
     errors.push('Contract end date must be on or after the joining date.');
+  }
+  if (payload.joinedOn && payload.leavingOn && payload.leavingOn < payload.joinedOn) {
+    errors.push('Leaving date must be on or after the joining date.');
   }
 
   if (Array.isArray(body.dependants)) {
@@ -1452,6 +1463,7 @@ function employeeProfile(id) {
     nationalIdNumber: row.national_id_number || '',
     employmentType: row.employment_type || '',
     joinedOn: row.joined_on,
+    leavingOn: row.leaving_on || '',
     yearsOfService: yearsSince(row.joined_on),
     contractEnd: row.contract_end || '',
     probationEnd: row.probation_end || '',
@@ -3210,9 +3222,13 @@ function computePaye(taxable) {
   return round2(tax);
 }
 
-function payrollFigures(amounts) {
-  const basic = round2(amounts.basicSalary);
-  const gross = round2(basic + round2(amounts.housingAllowance) + round2(amounts.transportAllowance) + round2(amounts.otherAllowance));
+function payrollFigures(amounts, factor = 1) {
+  const share = Number.isFinite(Number(factor)) ? Number(factor) : 1;
+  const basic = round2(round2(amounts.basicSalary) * share);
+  const gross = round2(
+    basic + round2(round2(amounts.housingAllowance) * share) +
+    round2(round2(amounts.transportAllowance) * share) + round2(round2(amounts.otherAllowance) * share)
+  );
   const ssnitEmployee = round2(basic * 0.055);
   const ssnitEmployer = round2(basic * 0.13);
   const paye = computePaye(round2(gross - ssnitEmployee));
@@ -3226,7 +3242,43 @@ function payrollPeriodLabel(period) {
   return `${MONTH_NAMES[Number(match[2]) - 1]} ${match[1]}`;
 }
 
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function isoDateText(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+  if (!match) return String(value || '');
+  return `${Number(match[3])} ${MONTH_SHORT[Number(match[2]) - 1]} ${match[1]}`;
+}
+
+function payrollMonthBounds(period) {
+  const [year, month] = String(period).split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return {
+    start: `${period}-01`,
+    end: `${period}-${String(lastDay).padStart(2, '0')}`,
+  };
+}
+
+function payrollProration(period, joinedOn, leavingOn) {
+  const { start, end } = payrollMonthBounds(period);
+  const joined = isIsoDate(joinedOn) ? joinedOn : start;
+  const left = isIsoDate(leavingOn) ? leavingOn : '';
+  if (joined > end) return null;
+  if (left && left < start) return null;
+  const from = joined > start ? joined : start;
+  const to = left && left < end ? left : end;
+  const periodDays = countWorkingDays(start, end);
+  const employedDays = countWorkingDays(from, to);
+  if (!periodDays || !employedDays) return null;
+  const notes = [];
+  if (joined > start) notes.push(`Joined ${isoDateText(joined)}`);
+  if (left && left <= end) notes.push(`Left ${isoDateText(left)}`);
+  return { periodDays, employedDays, note: notes.join(' · ') };
+}
+
 function payrollItemPayload(row) {
+  const periodDays = Number(row.period_days) || 0;
+  const paidDays = Number(row.paid_days) || 0;
   return {
     id: Number(row.id),
     employeeId: row.employee_id === null || row.employee_id === undefined ? null : Number(row.employee_id),
@@ -3250,6 +3302,15 @@ function payrollItemPayload(row) {
     ssnitEmployer: round2(row.ssnit_employer),
     paye: round2(row.paye),
     net: round2(row.net),
+    periodDays,
+    employedDays: Number(row.employed_days) || 0,
+    paidDays,
+    monthlyBasic: round2(row.monthly_basic) || round2(row.basic_salary),
+    monthlyHousing: round2(row.monthly_housing) || round2(row.housing_allowance),
+    monthlyTransport: round2(row.monthly_transport) || round2(row.transport_allowance),
+    monthlyOther: round2(row.monthly_other) || round2(row.other_allowance),
+    prorationNote: row.proration_note || '',
+    proration: periodDays ? round2(Math.min(1, paidDays / periodDays)) : 1,
   };
 }
 
@@ -3345,20 +3406,37 @@ async function handleCreatePayrollRun(req, res) {
     return sendJson(res, 409, { error: `Payroll for ${payrollPeriodLabel(period)} already exists.` });
   }
 
-  const active = db.prepare(
-    `SELECT id, staff_id, full_name, department, position,
+  const candidates = db.prepare(
+    `SELECT id, staff_id, full_name, department, position, status, joined_on, leaving_on,
             bank_name, bank_branch, account_name, account_number, ssnit_number,
             COALESCE(basic_salary, 0) AS basic_salary,
             COALESCE(housing_allowance, 0) AS housing_allowance,
             COALESCE(transport_allowance, 0) AS transport_allowance,
             COALESCE(other_allowance, 0) AS other_allowance
        FROM employees
-      WHERE status = 'Active'
       ORDER BY full_name COLLATE NOCASE ASC`
   ).all();
-  const paid = active.filter((row) => Number(row.basic_salary) > 0);
-  if (!paid.length) {
-    return sendJson(res, 400, { error: 'No active employee has a basic salary yet. Add salaries in Employees first.' });
+
+  const payable = [];
+  let skippedNoSalary = 0;
+  let skippedNoDate = 0;
+  for (const row of candidates) {
+    if (row.status === 'Inactive' && !row.leaving_on) {
+      skippedNoDate += 1;
+      continue;
+    }
+    const proration = payrollProration(period, row.joined_on, row.leaving_on);
+    if (!proration) continue;
+    if (Number(row.basic_salary) <= 0) {
+      skippedNoSalary += 1;
+      continue;
+    }
+    payable.push({ row, proration });
+  }
+  if (!payable.length) {
+    return sendJson(res, 400, {
+      error: `No employee with a basic salary is payable for ${payrollPeriodLabel(period)}. Check joining and leaving dates.`,
+    });
   }
 
   let runId;
@@ -3369,25 +3447,32 @@ async function handleCreatePayrollRun(req, res) {
       `INSERT INTO payroll_items
          (run_id, employee_id, staff_id, full_name, department, position, bank_name, bank_branch,
           account_name, account_number, ssnit_number, basic_salary, housing_allowance, transport_allowance,
-          other_allowance, gross, ssnit_employee, ssnit_employer, paye, net)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          other_allowance, gross, ssnit_employee, ssnit_employer, paye, net,
+          period_days, employed_days, paid_days, monthly_basic, monthly_housing, monthly_transport,
+          monthly_other, proration_note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
-    for (const row of paid) {
-      const amounts = {
-        basicSalary: row.basic_salary,
-        housingAllowance: row.housing_allowance,
-        transportAllowance: row.transport_allowance,
-        otherAllowance: row.other_allowance,
+    for (const { row, proration } of payable) {
+      const factor = proration.employedDays / proration.periodDays;
+      const monthly = {
+        basicSalary: round2(row.basic_salary),
+        housingAllowance: round2(row.housing_allowance),
+        transportAllowance: round2(row.transport_allowance),
+        otherAllowance: round2(row.other_allowance),
         otherDeductions: 0,
       };
-      const figures = payrollFigures(amounts);
+      const figures = payrollFigures(monthly, factor);
       insert.run(
         runId, Number(row.id), row.staff_id, row.full_name,
         row.department || '', row.position || '',
         row.bank_name || '', row.bank_branch || '', row.account_name || '', row.account_number || '',
         row.ssnit_number || '',
-        round2(row.basic_salary), round2(row.housing_allowance), round2(row.transport_allowance), round2(row.other_allowance),
-        figures.gross, figures.ssnitEmployee, figures.ssnitEmployer, figures.paye, figures.net
+        round2(monthly.basicSalary * factor), round2(monthly.housingAllowance * factor),
+        round2(monthly.transportAllowance * factor), round2(monthly.otherAllowance * factor),
+        figures.gross, figures.ssnitEmployee, figures.ssnitEmployer, figures.paye, figures.net,
+        proration.periodDays, proration.employedDays, proration.employedDays,
+        monthly.basicSalary, monthly.housingAllowance, monthly.transportAllowance, monthly.otherAllowance,
+        proration.note || null
       );
     }
     db.exec('COMMIT');
@@ -3397,7 +3482,12 @@ async function handleCreatePayrollRun(req, res) {
   }
 
   const run = payrollRunDetail(runId);
-  sendJson(res, 201, { run, skipped: active.length - paid.length, warnings: run.warnings });
+  sendJson(res, 201, {
+    run,
+    skipped: skippedNoSalary,
+    skippedNoDate,
+    warnings: run.warnings,
+  });
 }
 
 function handleGetPayrollRun(req, res, id) {
@@ -3413,7 +3503,7 @@ async function handleUpdatePayrollItem(req, res, id) {
   if (!user) return;
 
   const item = db.prepare(
-    `SELECT i.id, i.run_id, r.status AS run_status
+    `SELECT i.*, r.status AS run_status
        FROM payroll_items i JOIN payroll_runs r ON r.id = i.run_id
       WHERE i.id = ?`
   ).get(id);
@@ -3424,7 +3514,26 @@ async function handleUpdatePayrollItem(req, res, id) {
 
   const body = await readJson(req);
   const errors = [];
-  const amounts = {};
+  const periodDays = Number(item.period_days) || 0;
+  const employedDays = Number(item.employed_days) || periodDays;
+  let paidDays = Number(item.paid_days);
+  if (!Number.isFinite(paidDays)) paidDays = employedDays;
+
+  if (body.paidDays !== undefined && body.paidDays !== null && body.paidDays !== '') {
+    if (!periodDays) {
+      return sendJson(res, 400, {
+        error: 'This payslip has no working-day details. Delete the run and create it again.',
+      });
+    }
+    const days = Number(body.paidDays);
+    if (!Number.isInteger(days) || days < 0 || days > employedDays) {
+      return sendJson(res, 400, {
+        error: `Days paid must be a whole number between 0 and ${employedDays}.`,
+      });
+    }
+    paidDays = days;
+  }
+
   const readAmount = (key, label) => {
     const raw = body[key];
     if (raw === '' || raw === null || raw === undefined) return 0;
@@ -3436,30 +3545,47 @@ async function handleUpdatePayrollItem(req, res, id) {
     return round2(value);
   };
 
-  amounts.basicSalary = readAmount('basicSalary', 'Basic salary');
-  amounts.housingAllowance = readAmount('housingAllowance', 'Housing allowance');
-  amounts.transportAllowance = readAmount('transportAllowance', 'Transport allowance');
-  amounts.otherAllowance = readAmount('otherAllowance', 'Other allowance');
-  amounts.otherDeductions = readAmount('otherDeductions', 'Other deductions');
-  const note = String(body.otherDeductionNote ?? '').trim().slice(0, 120);
+  const monthly = {
+    basicSalary: Number(item.monthly_basic) || Number(item.basic_salary) || 0,
+    housingAllowance: Number(item.monthly_housing) || Number(item.housing_allowance) || 0,
+    transportAllowance: Number(item.monthly_transport) || Number(item.transport_allowance) || 0,
+    otherAllowance: Number(item.monthly_other) || Number(item.other_allowance) || 0,
+  };
+  if (body.basicSalary !== undefined) monthly.basicSalary = readAmount('basicSalary', 'Basic salary');
+  if (body.housingAllowance !== undefined) monthly.housingAllowance = readAmount('housingAllowance', 'Housing allowance');
+  if (body.transportAllowance !== undefined) monthly.transportAllowance = readAmount('transportAllowance', 'Transport allowance');
+  if (body.otherAllowance !== undefined) monthly.otherAllowance = readAmount('otherAllowance', 'Other allowance');
+  const otherDeductions = body.otherDeductions === undefined
+    ? round2(item.other_deductions)
+    : readAmount('otherDeductions', 'Other deductions');
+  const note = body.otherDeductionNote === undefined
+    ? String(item.other_deduction_note || '')
+    : String(body.otherDeductionNote ?? '').trim().slice(0, 120);
   if (errors.length) return sendJson(res, 400, { error: errors[0] });
 
-  const figures = payrollFigures(amounts);
+  const factor = periodDays ? Math.min(1, paidDays / periodDays) : 1;
+  const amounts = { ...monthly, otherDeductions };
+  const figures = payrollFigures(amounts, factor);
   if (figures.net < 0) {
     const available = round2(figures.gross - figures.ssnitEmployee - figures.paye);
     return sendJson(res, 400, {
-      error: `Other deductions cannot exceed ${moneyText(available)} — the pay left after SSNIT and PAYE.`,
+      error: `Deductions cannot exceed ${moneyText(available)} — the pay left after SSNIT and PAYE.`,
     });
   }
   db.prepare(
     `UPDATE payroll_items
         SET basic_salary = ?, housing_allowance = ?, transport_allowance = ?, other_allowance = ?,
+            monthly_basic = ?, monthly_housing = ?, monthly_transport = ?, monthly_other = ?,
+            period_days = ?, employed_days = ?, paid_days = ?,
             other_deductions = ?, other_deduction_note = ?, gross = ?, ssnit_employee = ?, ssnit_employer = ?,
             paye = ?, net = ?
       WHERE id = ?`
   ).run(
-    amounts.basicSalary, amounts.housingAllowance, amounts.transportAllowance, amounts.otherAllowance,
-    amounts.otherDeductions, note || null, figures.gross, figures.ssnitEmployee, figures.ssnitEmployer,
+    round2(monthly.basicSalary * factor), round2(monthly.housingAllowance * factor),
+    round2(monthly.transportAllowance * factor), round2(monthly.otherAllowance * factor),
+    monthly.basicSalary, monthly.housingAllowance, monthly.transportAllowance, monthly.otherAllowance,
+    periodDays, employedDays, paidDays,
+    otherDeductions, note || null, figures.gross, figures.ssnitEmployee, figures.ssnitEmployer,
     figures.paye, figures.net, id
   );
 

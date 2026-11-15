@@ -178,6 +178,11 @@ const payslipEditForm = $('payslip-edit-form');
 const payslipEditError = $('payslip-edit-error');
 const payslipEditSubmit = $('payslip-edit-submit');
 
+const payrollDaysDialog = $('payroll-days-dialog');
+const payrollDaysForm = $('payroll-days-form');
+const payrollDaysError = $('payroll-days-error');
+const payrollDaysSubmit = $('payroll-days-submit');
+
 const leaveDialog = $('leave-dialog');
 const leaveForm = $('leave-form');
 const leaveError = $('leave-error');
@@ -936,7 +941,8 @@ const FIELD_TABS = {
   maritalStatus: 'personal', phone: 'personal', email: 'personal', nationalIdType: 'personal',
   nationalIdNumber: 'personal', residentialAddress: 'personal',
   position: 'employment', department: 'employment', employmentType: 'employment', joinedOn: 'employment',
-  contractEnd: 'employment', probationEnd: 'employment', status: 'employment', isExpatriate: 'employment',
+  leavingOn: 'employment', contractEnd: 'employment', probationEnd: 'employment', status: 'employment',
+  isExpatriate: 'employment',
   leaveEntitlement: 'employment', leaveOpening: 'employment',
   basicSalary: 'employment', housingAllowance: 'employment', transportAllowance: 'employment',
   otherAllowance: 'employment',
@@ -952,7 +958,7 @@ const FIELD_TABS = {
 const EMPLOYEE_FIELDS = [
   'staffId', 'fullName', 'dob', 'sex', 'nationality', 'maritalStatus', 'phone', 'email',
   'nationalIdType', 'nationalIdNumber', 'residentialAddress',
-  'position', 'department', 'employmentType', 'joinedOn', 'contractEnd', 'probationEnd', 'status',
+  'position', 'department', 'employmentType', 'joinedOn', 'leavingOn', 'contractEnd', 'probationEnd', 'status',
   'leaveEntitlement', 'leaveOpening',
   'basicSalary', 'housingAllowance', 'transportAllowance', 'otherAllowance',
   'fatherName', 'fatherContact', 'motherName', 'motherContact', 'spouseName', 'spouseContact',
@@ -1321,6 +1327,7 @@ function collectEmployeePayload() {
     unit: value('unit'),
     employmentType: value('employmentType'),
     joinedOn: value('joinedOn'),
+    leavingOn: value('leavingOn'),
     contractEnd: value('contractEnd'),
     probationEnd: value('probationEnd'),
     status: employeeForm.elements.status.value,
@@ -1395,6 +1402,9 @@ function validateEmployeePayload(payload) {
   }
   if (payload.joinedOn && payload.contractEnd && payload.contractEnd < payload.joinedOn) {
     return { name: 'contractEnd', message: 'Contract end date must be on or after the joining date.' };
+  }
+  if (payload.joinedOn && payload.leavingOn && payload.leavingOn < payload.joinedOn) {
+    return { name: 'leavingOn', message: 'Leaving date must be on or after the joining date.' };
   }
   for (const row of payload.education) {
     if (row.year && !Number.isInteger(Number(row.year))) {
@@ -2250,6 +2260,7 @@ function renderReport(profile) {
     ['Department', profile.department],
     ['Employment type', profile.employmentType],
     ['Joined', profile.joinedOn ? `${formatDate(profile.joinedOn)} (${profile.yearsOfService} yrs)` : ''],
+    ['Leaving', profile.leavingOn ? formatDate(profile.leavingOn) : ''],
     ['Contract / service end', profile.contractEnd ? formatDate(profile.contractEnd) : ''],
     ['Probation end', profile.probationEnd ? formatDate(profile.probationEnd) : ''],
     ['Status', profile.status],
@@ -2937,10 +2948,13 @@ function computePaye(taxable) {
   return roundMoney(tax);
 }
 
-function payrollFigures(amounts) {
-  const basic = roundMoney(amounts.basicSalary);
+function payrollFigures(amounts, factor = 1) {
+  const share = Number.isFinite(Number(factor)) ? Number(factor) : 1;
+  const basic = roundMoney(roundMoney(amounts.basicSalary) * share);
   const gross = roundMoney(
-    basic + roundMoney(amounts.housingAllowance) + roundMoney(amounts.transportAllowance) + roundMoney(amounts.otherAllowance)
+    basic + roundMoney(roundMoney(amounts.housingAllowance) * share) +
+    roundMoney(roundMoney(amounts.transportAllowance) * share) +
+    roundMoney(roundMoney(amounts.otherAllowance) * share)
   );
   const ssnitEmployee = roundMoney(basic * 0.055);
   const ssnitEmployer = roundMoney(basic * 0.13);
@@ -3094,7 +3108,14 @@ function renderPayrollRun(run) {
     const row = document.createElement('tr');
     row.dataset.id = String(item.id);
     row.append(el('td', 'staff-id', item.staffId));
-    row.append(el('td', 'name', item.fullName));
+    const nameCell = el('td', 'name', item.fullName);
+    if (item.prorationNote) nameCell.append(el('div', 'cell-sub', item.prorationNote));
+    row.append(nameCell);
+    const prorated = item.periodDays > 0 && item.paidDays < item.periodDays;
+    const daysText = item.periodDays ? `${item.paidDays} / ${item.periodDays}` : 'Full';
+    const daysCell = el('td', `num days-paid${prorated ? ' prorated' : ''}`, daysText);
+    if (prorated) daysCell.title = `${item.paidDays} of ${item.periodDays} working days paid`;
+    row.append(daysCell);
     row.append(el('td', 'num', money(item.basicSalary)));
     row.append(el('td', 'num', money(allowances)));
     row.append(el('td', 'num', money(item.gross)));
@@ -3105,6 +3126,10 @@ function renderPayrollRun(run) {
 
     const actions = el('td', 'actions-cell');
     if (canEdit() && run.status === 'Draft') {
+      const days = el('button', 'btn-link', 'Days');
+      days.type = 'button';
+      days.addEventListener('click', () => openPayrollDays(item));
+      actions.append(days);
       const edit = el('button', 'btn-link', 'Edit');
       edit.type = 'button';
       edit.addEventListener('click', () => openPayslipEditor(item));
@@ -3121,7 +3146,7 @@ function renderPayrollRun(run) {
   if (items.length) {
     const row = el('tr', 'payroll-total-row');
     const label = el('td', null, 'Total');
-    label.colSpan = 2;
+    label.colSpan = 3;
     row.append(label);
     row.append(el('td', 'num', money(totals.basic)));
     row.append(el('td', 'num', money(totals.allowances)));
@@ -3204,6 +3229,7 @@ payrollForm.addEventListener('submit', async (event) => {
     const warnings = (data.warnings || []).length;
     const parts = [`${data.run.label} payroll drafted for ${data.run.totals.staffCount} staff.`];
     if (data.skipped) parts.push(`${data.skipped} skipped without a basic salary.`);
+    if (data.skippedNoDate) parts.push(`${data.skippedNoDate} inactive ${plural(data.skippedNoDate, 'employee', 'employees')} skipped without a leaving date.`);
     if (warnings) parts.push(`${warnings} ${plural(warnings, 'payslip needs', 'payslips need')} SSNIT or bank details.`);
     toast(parts.join(' '));
     await loadPayrollView();
@@ -3273,9 +3299,16 @@ $('payroll-delete-btn').addEventListener('click', () => {
 });
 
 function fillPayslipForm(item) {
-  for (const name of ['basicSalary', 'housingAllowance', 'transportAllowance', 'otherAllowance', 'otherDeductions']) {
-    payslipEditForm.elements[name].value = String(item[name]);
+  const monthly = {
+    basicSalary: item.monthlyBasic ?? item.basicSalary,
+    housingAllowance: item.monthlyHousing ?? item.housingAllowance,
+    transportAllowance: item.monthlyTransport ?? item.transportAllowance,
+    otherAllowance: item.monthlyOther ?? item.otherAllowance,
+  };
+  for (const name of ['basicSalary', 'housingAllowance', 'transportAllowance', 'otherAllowance']) {
+    payslipEditForm.elements[name].value = String(monthly[name]);
   }
+  payslipEditForm.elements.otherDeductions.value = String(item.otherDeductions);
   payslipEditForm.elements.otherDeductionNote.value = item.otherDeductionNote;
 }
 
@@ -3293,18 +3326,31 @@ function payslipFormAmounts() {
   };
 }
 
+function payslipFactor() {
+  const item = state.editingPayslip;
+  if (!item || !item.periodDays) return 1;
+  return Math.min(1, (Number(item.paidDays) || 0) / item.periodDays);
+}
+
 function updatePayslipPreview() {
-  const figures = payrollFigures(payslipFormAmounts());
+  const figures = payrollFigures(payslipFormAmounts(), payslipFactor());
+  const item = state.editingPayslip;
+  const paidText = item && item.periodDays && payslipFactor() < 1
+    ? `Paid for ${item.paidDays} of ${item.periodDays} days · `
+    : '';
   $('payslip-preview').textContent =
-    `Gross ${money(figures.gross)} · SSNIT ${money(figures.ssnitEmployee)} · PAYE ${money(figures.paye)} · Net ${money(figures.net)}`;
+    `${paidText}Gross ${money(figures.gross)} · SSNIT ${money(figures.ssnitEmployee)} · PAYE ${money(figures.paye)} · Net ${money(figures.net)}`;
 }
 
 function openPayslipEditor(item) {
   state.editingPayslipId = item.id;
+  state.editingPayslip = item;
   payslipEditForm.reset();
   hideFormError(payslipEditError);
   clearInvalid(payslipEditForm);
-  $('payslip-edit-sub').textContent = `${item.fullName} · ${item.staffId} · ${state.payrollRun ? state.payrollRun.label : ''}`;
+  const parts = [item.fullName, item.staffId, state.payrollRun ? state.payrollRun.label : ''];
+  if (item.prorationNote) parts.push(item.prorationNote);
+  $('payslip-edit-sub').textContent = parts.filter(Boolean).join(' · ');
   fillPayslipForm(item);
   updatePayslipPreview();
   payslipEditDialog.showModal();
@@ -3317,6 +3363,7 @@ payslipEditForm.addEventListener('input', (event) => {
 
 payslipEditDialog.addEventListener('close', () => {
   state.editingPayslipId = null;
+  state.editingPayslip = null;
 });
 
 payslipEditForm.addEventListener('submit', async (event) => {
@@ -3326,11 +3373,11 @@ payslipEditForm.addEventListener('submit', async (event) => {
   if (!itemId) return;
 
   const amounts = payslipFormAmounts();
-  const figures = payrollFigures(amounts);
+  const figures = payrollFigures(amounts, payslipFactor());
   if (figures.net < 0) {
     const available = roundMoney(figures.gross - figures.ssnitEmployee - figures.paye);
     markInvalid(payslipEditForm.elements.otherDeductions, true);
-    showFormError(payslipEditError, `Other deductions cannot exceed ${money(available)} — the pay left after SSNIT and PAYE.`);
+    showFormError(payslipEditError, `Deductions cannot exceed ${money(available)} — the pay left after SSNIT and PAYE.`);
     return;
   }
 
@@ -3355,6 +3402,94 @@ payslipEditForm.addEventListener('submit', async (event) => {
     showFormError(payslipEditError, err.message);
   } finally {
     setBusy(payslipEditSubmit, false, 'Save payslip', 'Saving…');
+  }
+});
+
+function payrollDaysFactor() {
+  const item = state.editingDaysItem;
+  if (!item || !item.periodDays) return 1;
+  return Math.min(1, (Number(payrollDaysForm.elements.paidDays.value) || 0) / item.periodDays);
+}
+
+function updatePayrollDaysPreview() {
+  const item = state.editingDaysItem;
+  if (!item || !item.periodDays) {
+    $('payroll-days-preview').textContent = '';
+    return;
+  }
+  const monthly = {
+    basicSalary: item.monthlyBasic,
+    housingAllowance: item.monthlyHousing,
+    transportAllowance: item.monthlyTransport,
+    otherAllowance: item.monthlyOther,
+    otherDeductions: item.otherDeductions,
+  };
+  const figures = payrollFigures(monthly, payrollDaysFactor());
+  const days = Math.max(0, Number(payrollDaysForm.elements.paidDays.value) || 0);
+  $('payroll-days-preview').textContent =
+    `${days} of ${item.periodDays} days · gross ${money(figures.gross)} · net ${money(figures.net)}`;
+}
+
+function openPayrollDays(item) {
+  state.editingDaysItem = item;
+  payrollDaysForm.reset();
+  hideFormError(payrollDaysError);
+  clearInvalid(payrollDaysForm);
+  const label = state.payrollRun ? state.payrollRun.label : '';
+  $('payroll-days-sub').textContent = [item.fullName, item.staffId, label].filter(Boolean).join(' · ');
+  const context = item.periodDays
+    ? `${item.periodDays} working days in the month; employed for ${item.employedDays}.`
+    : 'This payslip has no working-day details. Delete the run and create it again.';
+  $('payroll-days-context').textContent = item.prorationNote ? `${context} ${item.prorationNote}.` : context;
+  const input = payrollDaysForm.elements.paidDays;
+  input.max = String(item.employedDays || 0);
+  input.value = String(item.paidDays || 0);
+  updatePayrollDaysPreview();
+  payrollDaysDialog.showModal();
+}
+
+payrollDaysForm.addEventListener('input', (event) => {
+  if (event.target.matches('input')) markInvalid(event.target, false);
+  updatePayrollDaysPreview();
+});
+
+payrollDaysDialog.addEventListener('close', () => {
+  state.editingDaysItem = null;
+});
+
+payrollDaysForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  hideFormError(payrollDaysError);
+  const item = state.editingDaysItem;
+  if (!item) return;
+
+  const days = Number(payrollDaysForm.elements.paidDays.value);
+  if (!item.periodDays) {
+    showFormError(payrollDaysError, 'This payslip has no working-day details. Delete the run and create it again.');
+    return;
+  }
+  if (!Number.isInteger(days) || days < 0 || days > item.employedDays) {
+    markInvalid(payrollDaysForm.elements.paidDays, true);
+    showFormError(payrollDaysError, `Days paid must be a whole number between 0 and ${item.employedDays}.`);
+    return;
+  }
+
+  setBusy(payrollDaysSubmit, true, 'Save days', 'Saving…');
+  try {
+    const data = await api(`/api/payroll/items/${item.id}`, jsonRequest('PATCH', { paidDays: days }));
+    payrollDaysDialog.close();
+    state.payrollRun = data.run;
+    state.payrollRunId = data.run.id;
+    mergeRunSummary(data.run);
+    renderPayrollRuns();
+    renderPayrollRun(data.run);
+    hidePayslip();
+    toast(`${item.fullName}: paid for ${days} of ${item.periodDays} working days.`);
+  } catch (err) {
+    if (err.status === 401) return;
+    showFormError(payrollDaysError, err.message);
+  } finally {
+    setBusy(payrollDaysSubmit, false, 'Save days', 'Saving…');
   }
 });
 
@@ -3393,11 +3528,16 @@ function renderPayslip(data) {
     ['Staff ID', item.staffId],
     ['Job title', employee.position || '—'],
     ['Department', employee.department || '—'],
+  ];
+  if (item.periodDays) {
+    details.push(['Days paid', `${item.paidDays} of ${item.periodDays} working days`]);
+  }
+  details.push(
     ['SSNIT number', employee.ssnitNumber || '—'],
     ['Bank', employee.bankName || '—'],
     ['Account number', employee.accountNumber || '—'],
-    ['Gross pay', money(item.gross)],
-  ];
+    ['Gross pay', money(item.gross)]
+  );
   for (const [label, value] of details) {
     const block = el('div', 'payslip-meta-item');
     block.append(el('span', null, label));
@@ -3429,8 +3569,13 @@ function renderPayslip(data) {
   net.append(el('span', null, 'Net pay'));
   net.append(el('strong', null, money(item.net)));
 
-  const foot = el('p', 'payslip-foot',
-    `Employer SSNIT contribution (13%): ${money(item.ssnitEmployer)} · Prepared ${formatDate(todayISO())} · ${company}`);
+  const footParts = [`Employer SSNIT contribution (13%): ${money(item.ssnitEmployer)}`];
+  if (item.periodDays && item.paidDays < item.periodDays) {
+    footParts.push(`Basic and allowances prorated to ${item.paidDays} of ${item.periodDays} working days`);
+  }
+  if (item.prorationNote) footParts.push(item.prorationNote);
+  footParts.push(`Prepared ${formatDate(todayISO())}`, company);
+  const foot = el('p', 'payslip-foot', footParts.join(' · '));
 
   sheet.append(head, meta, columns, net, foot);
 }

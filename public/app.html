@@ -718,6 +718,7 @@
                   <tr>
                     <th scope="col">Staff ID</th>
                     <th scope="col">Name</th>
+                    <th scope="col" class="num">Days paid</th>
                     <th scope="col" class="num">Basic</th>
                     <th scope="col" class="num">Allowances</th>
                     <th scope="col" class="num">Gross</th>
@@ -1066,6 +1067,11 @@
           <label class="field">
             <span>Contract / service end date</span>
             <input name="contractEnd" type="date">
+          </label>
+          <label class="field">
+            <span>Leaving date</span>
+            <input name="leavingOn" type="date">
+            <em class="computed">Last day worked; payroll prorates that month</em>
           </label>
           <label class="field">
             <span>Probation end date</span>
@@ -1807,7 +1813,7 @@
         <span>Pay period *</span>
         <input name="period" type="month" required>
       </label>
-      <p class="hint">One run per month. You can edit individual payslips before approving.</p>
+      <p class="hint">One run per month. Joiners and leavers are prorated by working days; you can record unpaid days before approving.</p>
 
       <p class="form-error" id="payroll-error" role="alert" hidden></p>
 
@@ -1830,19 +1836,19 @@
 
       <div class="form-grid">
         <label class="field">
-          <span>Basic salary (GHS)</span>
+          <span>Basic salary (GHS per month)</span>
           <input name="basicSalary" type="number" min="0" max="10000000" step="0.01">
         </label>
         <label class="field">
-          <span>Housing allowance</span>
+          <span>Housing allowance (monthly)</span>
           <input name="housingAllowance" type="number" min="0" max="10000000" step="0.01">
         </label>
         <label class="field">
-          <span>Transport allowance</span>
+          <span>Transport allowance (monthly)</span>
           <input name="transportAllowance" type="number" min="0" max="10000000" step="0.01">
         </label>
         <label class="field">
-          <span>Other allowance</span>
+          <span>Other allowance (monthly)</span>
           <input name="otherAllowance" type="number" min="0" max="10000000" step="0.01">
         </label>
         <label class="field">
@@ -1862,6 +1868,33 @@
       <footer class="modal-actions">
         <button class="btn btn-quiet" type="button" data-close>Cancel</button>
         <button class="btn btn-primary" type="submit" id="payslip-edit-submit">Save payslip</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="payroll-days-dialog" aria-labelledby="payroll-days-title">
+    <form class="modal-card" id="payroll-days-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="payroll-days-title">Days paid</h2>
+          <p class="muted" id="payroll-days-sub"></p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <p class="hint" id="payroll-days-context"></p>
+
+      <label class="field">
+        <span>Days paid *</span>
+        <input name="paidDays" type="number" min="0" step="1" required>
+        <em class="computed" id="payroll-days-preview"></em>
+      </label>
+
+      <p class="form-error" id="payroll-days-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="payroll-days-submit">Save days</button>
       </footer>
     </form>
   </dialog>

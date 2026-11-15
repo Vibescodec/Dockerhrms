@@ -1260,6 +1260,15 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
+.staff-table .days-paid {
+  white-space: nowrap;
+}
+
+.staff-table .days-paid.prorated {
+  color: var(--warn-ink);
+  font-weight: 600;
+}
+
 .staff-table .mono {
   color: var(--ink-soft);
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -2167,7 +2176,7 @@ tr.row-new td {
 }
 
 .payroll-table {
-  min-width: 1080px;
+  min-width: 1160px;
 }
 
 .payroll-table .num {

@@ -1,0 +1,1954 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard · Docker HRMS</title>
+  <script src="/js/theme.js"></script>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="icon" href="/api/logo">
+</head>
+<body class="app-body">
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <a class="sidebar-brand-link" href="/app" data-route aria-label="Docker HRMS dashboard">
+          <img class="brand-logo" src="/api/logo" alt="">
+          <span class="sidebar-brand-text">
+            <strong>Docker</strong>
+            <span>HRMS</span>
+          </span>
+        </a>
+        <button class="brand-company" id="brand-company-btn" type="button" title="Change company name">
+          <span id="brand-company-name">Docker HRMS</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m18 2 4 4"></path>
+            <path d="M7.5 20.5 2 22l1.5-5.5L17 3a2.8 2.8 0 0 1 4 4Z"></path>
+          </svg>
+        </button>
+        <input class="brand-company-input" id="brand-company-input" type="text" maxlength="60" aria-label="Company name" hidden>
+      </div>
+
+      <nav class="side-nav" aria-label="Main">
+        <a class="side-link" href="/app" data-route>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="9" rx="1.5"></rect>
+            <rect x="14" y="3" width="7" height="5" rx="1.5"></rect>
+            <rect x="14" y="12" width="7" height="9" rx="1.5"></rect>
+            <rect x="3" y="16" width="7" height="5" rx="1.5"></rect>
+          </svg>
+          <span>Dashboard</span>
+        </a>
+        <a class="side-link" href="/employees" data-route>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          <span>Employees</span>
+        </a>
+        <a class="side-link" href="/departments" data-route>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 21V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v15"></path>
+            <path d="M15 10h3a2 2 0 0 1 2 2v9"></path>
+            <path d="M2 21h20"></path>
+            <path d="M8 8h3M8 12h3M8 16h3"></path>
+          </svg>
+          <span>Departments</span>
+        </a>
+        <a class="side-link" href="/payroll" data-route>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2.5" y="6" width="19" height="12" rx="2"></rect>
+            <circle cx="12" cy="12" r="2.4"></circle>
+            <path d="M6 9.5v5M18 9.5v5"></path>
+          </svg>
+          <span>Payroll</span>
+        </a>
+        <a class="side-link" href="/bank-ssnit" data-route>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2.5" y="5" width="19" height="14" rx="2.5"></rect>
+            <path d="M2.5 10h19"></path>
+            <path d="M6 15h4"></path>
+          </svg>
+          <span>Bank &amp; SSNIT</span>
+        </a>
+        <a class="side-link" href="/leave" data-route>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4.5" width="18" height="16" rx="2.5"></rect>
+            <path d="M3 9.5h18"></path>
+            <path d="M8 2.5v4M16 2.5v4"></path>
+            <path d="m9 15 2 2 4-4"></path>
+          </svg>
+          <span>Leave</span>
+        </a>
+        <a class="side-link" href="/health-records" data-route>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 12h4l2-7 4 14 2-7h6"></path>
+          </svg>
+          <span>Health records</span>
+        </a>
+        <a class="side-link" href="/training" data-route>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M2 4h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H2Z"></path>
+            <path d="M22 4h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7Z"></path>
+          </svg>
+          <span>Training records</span>
+        </a>
+        <a class="side-link" href="/expatriates" data-route>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M3 12h18"></path>
+            <path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18"></path>
+          </svg>
+          <span>Expatriate Monitor</span>
+        </a>
+        <a class="side-link" href="/reports" data-route>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path>
+            <path d="M14 2v6h6"></path>
+            <path d="M8 13h8M8 17h8M8 9h2"></path>
+          </svg>
+          <span>HR reports</span>
+        </a>
+        <a class="side-link" href="/reminders" data-route>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.7 21a2 2 0 0 1-3.4 0"></path>
+          </svg>
+          <span>Reminders</span>
+        </a>
+        <a class="side-link" href="/users" data-route id="users-nav-link" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M19 8v6"></path>
+            <path d="M22 11h-6"></path>
+          </svg>
+          <span>Users &amp; roles</span>
+        </a>
+        <a class="side-link" href="/admin" data-route id="admin-nav-link" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path>
+            <path d="m9 12 2 2 4-4"></path>
+          </svg>
+          <span>Admin</span>
+        </a>
+      </nav>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-square sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m11 17-5-5 5-5"></path>
+              <path d="m18 17-5-5 5-5"></path>
+            </svg>
+          </button>
+          <h1 class="page-title" id="page-title">Dashboard</h1>
+        </div>
+
+        <div class="topbar-right">
+          <button class="icon-square" id="theme-toggle" type="button" aria-label="Switch to dark theme" title="Switch to dark theme">
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+            </svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
+            </svg>
+          </button>
+
+          <div class="user-menu">
+            <button class="avatar" id="user-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu">SA</button>
+            <div class="menu" id="user-menu-pop" role="menu" hidden>
+              <div class="menu-head">
+                <strong id="menu-name">—</strong>
+                <span id="menu-role"></span>
+              </div>
+              <button type="button" role="menuitem" id="change-password-btn">Change password</button>
+              <button type="button" role="menuitem" id="replace-logo-btn">Replace logo</button>
+              <button type="button" role="menuitem" class="danger" id="logout-btn">Sign out</button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="view" id="view-dashboard" aria-label="Dashboard">
+          <div class="page-intro">
+            <div>
+              <p class="page-eyebrow" id="dash-date">&nbsp;</p>
+              <h2 class="page-greeting" id="dash-greeting">Welcome back</h2>
+              <p class="page-sub" id="dash-sub">&nbsp;</p>
+            </div>
+            <div class="quick-actions" data-editor-only>
+              <button class="btn btn-primary" id="add-employee-btn" type="button">Add employee</button>
+              <button class="btn btn-quiet" id="quick-training" type="button">Log training</button>
+              <button class="btn btn-quiet" id="quick-health" type="button">Health visit</button>
+              <button class="btn btn-quiet" id="quick-task" type="button">Add task</button>
+            </div>
+          </div>
+
+          <div class="attention-strip">
+            <a class="attention-card" href="/reminders" data-route>
+              <span class="attention-label">Birthdays this week</span>
+              <strong class="attention-value" id="attention-birthdays">—</strong>
+              <span class="attention-sub" id="attention-birthdays-sub">Across all staff</span>
+            </a>
+            <a class="attention-card" href="/expatriates" data-route>
+              <span class="attention-label">Expiring permits</span>
+              <strong class="attention-value" id="attention-permits">—</strong>
+              <span class="attention-sub" id="attention-permits-sub">Work permits &amp; documents</span>
+            </a>
+            <a class="attention-card" href="/reminders" data-route>
+              <span class="attention-label">Open tasks</span>
+              <strong class="attention-value" id="attention-tasks">—</strong>
+              <span class="attention-sub" id="attention-tasks-sub">Reminders to action</span>
+            </a>
+          </div>
+
+          <div class="stats">
+            <article class="stat-card">
+              <div class="stat-top">
+                <p class="stat-label">Total staff</p>
+                <span class="stat-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                  </svg>
+                </span>
+              </div>
+              <p class="stat-value" id="stat-total">—</p>
+              <p class="stat-sub" id="stat-total-sub">&nbsp;</p>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top">
+                <p class="stat-label">Active staff</p>
+                <span class="stat-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <path d="m22 4-10 10.01-3-3"></path>
+                  </svg>
+                </span>
+              </div>
+              <p class="stat-value" id="stat-active">—</p>
+              <p class="stat-sub" id="stat-active-sub">&nbsp;</p>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top">
+                <p class="stat-label">Training records</p>
+                <span class="stat-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 4h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H2Z"></path>
+                    <path d="M22 4h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7Z"></path>
+                  </svg>
+                </span>
+              </div>
+              <p class="stat-value" id="stat-training">—</p>
+              <p class="stat-sub" id="stat-training-sub">&nbsp;</p>
+            </article>
+            <article class="stat-card">
+              <div class="stat-top">
+                <p class="stat-label">Longest service</p>
+                <span class="stat-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="6"></circle>
+                    <path d="M15.5 13 17 22l-5-3-5 3 1.5-9"></path>
+                  </svg>
+                </span>
+              </div>
+              <p class="stat-value" id="stat-longest">—</p>
+              <p class="stat-sub" id="stat-longest-sub">&nbsp;</p>
+            </article>
+          </div>
+
+          <section class="panel" aria-labelledby="directory-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="directory-title">Staff directory</h2>
+                <p class="panel-sub" id="staff-count">&nbsp;</p>
+              </div>
+              <label class="search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7"></circle>
+                  <path d="m20 20-3.5-3.5"></path>
+                </svg>
+                <input id="staff-search" type="search" placeholder="Search name, ID or department" aria-label="Search staff" autocomplete="off">
+              </label>
+            </div>
+
+            <div class="table-wrap">
+              <table class="staff-table" id="staff-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Staff ID</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Department</th>
+                    <th scope="col">Position</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Joined</th>
+                  </tr>
+                </thead>
+                <tbody id="staff-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty" id="staff-empty" hidden>
+              <p id="empty-message">No staff records yet.</p>
+              <button class="btn btn-quiet" type="button" id="empty-action" hidden>Clear search</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-employees" aria-label="Employees" hidden>
+          <section class="panel filter-panel">
+            <div class="filter-row">
+              <label class="field filter-field">
+                <span>Search</span>
+                <input id="employee-filter-q" type="search" placeholder="Name, ID, email, phone or title" autocomplete="off">
+              </label>
+              <label class="field filter-field">
+                <span>Department</span>
+                <select id="employee-filter-department"><option value="">All departments</option></select>
+              </label>
+              <label class="field filter-field">
+                <span>Status</span>
+                <select id="employee-filter-status">
+                  <option value="">All statuses</option>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </label>
+              <label class="field filter-field">
+                <span>Employment type</span>
+                <select id="employee-filter-type">
+                  <option value="">All types</option>
+                  <option value="Full-time">Full-time</option>
+                  <option value="Part-time">Part-time</option>
+                  <option value="Contract">Contract</option>
+                  <option value="Casual">Casual</option>
+                  <option value="Internship">Internship</option>
+                  <option value="National Service">National Service</option>
+                </select>
+              </label>
+              <button class="btn btn-quiet filter-actions" id="employee-filter-reset" type="button">Reset filters</button>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="employees-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="employees-title">Employees</h2>
+                <p class="panel-sub" id="employees-sub">&nbsp;</p>
+              </div>
+              <button class="btn btn-primary" id="employees-add-btn" data-editor-only type="button">Add employee</button>
+            </div>
+
+            <div class="table-wrap">
+              <table class="staff-table employee-table" id="employees-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Employee</th>
+                    <th scope="col">Job title</th>
+                    <th scope="col">Department</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Phone</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="employees-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty" id="employees-empty" hidden>
+              <p id="employees-empty-text">No employees match those filters.</p>
+              <button class="btn btn-quiet" id="employees-empty-reset" type="button">Clear filters</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-health" aria-label="Health records" hidden>
+          <section class="panel filter-panel">
+            <div class="filter-row">
+              <label class="field filter-field">
+                <span>Search</span>
+                <input id="health-filter-q" type="search" placeholder="Title, employee or notes" autocomplete="off">
+              </label>
+              <label class="field filter-field">
+                <span>Employee</span>
+                <select id="health-filter-employee"><option value="">All employees</option></select>
+              </label>
+              <button class="btn btn-quiet filter-actions" id="health-filter-reset" type="button">Reset filters</button>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="health-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="health-title">Health records</h2>
+                <p class="panel-sub" id="health-sub">&nbsp;</p>
+              </div>
+              <button class="btn btn-primary" id="add-health-btn" data-health-only type="button">Add record</button>
+            </div>
+
+            <div class="table-wrap">
+              <table class="staff-table health-table" id="health-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Employee</th>
+                    <th scope="col">Record</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Notes</th>
+                    <th scope="col">Attachment</th>
+                    <th scope="col" class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="health-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty" id="health-empty" hidden>
+              <p>No health records yet. Add a record and attach a document or picture if needed.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-training" aria-label="Training records" hidden>
+          <section class="panel filter-panel">
+            <div class="filter-row">
+              <label class="field filter-field">
+                <span>Search</span>
+                <input id="training-filter-q" type="search" placeholder="Training, employee or facilitator" autocomplete="off">
+              </label>
+              <label class="field filter-field">
+                <span>Employee</span>
+                <select id="training-filter-employee"><option value="">All employees</option></select>
+              </label>
+              <button class="btn btn-quiet filter-actions" id="training-filter-reset" type="button">Reset filters</button>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="training-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="training-title">Training records</h2>
+                <p class="panel-sub" id="training-sub">&nbsp;</p>
+              </div>
+              <button class="btn btn-primary" id="add-training-btn" data-editor-only type="button">Add training</button>
+            </div>
+
+            <div class="table-wrap">
+              <table class="staff-table training-table" id="training-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Employee</th>
+                    <th scope="col">Training</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Duration</th>
+                    <th scope="col">Facilitator</th>
+                    <th scope="col">Venue</th>
+                    <th scope="col" class="num">Score</th>
+                    <th scope="col">Certificate</th>
+                    <th scope="col">Remarks</th>
+                    <th scope="col" class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="training-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty" id="training-empty" hidden>
+              <p>No training records match those filters.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-expatriates" aria-label="Expatriate monitor" hidden>
+          <div class="stats stats-5">
+            <article class="stat-card">
+              <p class="stat-label">Total expatriates</p>
+              <p class="stat-value" id="expat-total">—</p>
+              <p class="stat-sub">on the register</p>
+            </article>
+            <article class="stat-card">
+              <p class="stat-label">Permits expiring</p>
+              <p class="stat-value" id="expat-expiring">—</p>
+              <p class="stat-sub">within 90 days</p>
+            </article>
+            <article class="stat-card">
+              <p class="stat-label">Expired documents</p>
+              <p class="stat-value" id="expat-expired">—</p>
+              <p class="stat-sub">passport or permit</p>
+            </article>
+            <article class="stat-card">
+              <p class="stat-label">With accommodation</p>
+              <p class="stat-value" id="expat-accommodation">—</p>
+              <p class="stat-sub">company provided</p>
+            </article>
+            <article class="stat-card">
+              <p class="stat-label">Passports</p>
+              <p class="stat-value" id="expat-passports">—</p>
+              <p class="stat-sub">numbers on file</p>
+            </article>
+          </div>
+
+          <section class="panel" aria-labelledby="expat-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="expat-title">Expatriate Monitor</h2>
+                <p class="panel-sub" id="expat-sub">&nbsp;</p>
+              </div>
+              <button class="btn btn-primary" id="add-expat-btn" data-editor-only type="button">Add expatriate</button>
+            </div>
+
+            <div class="table-wrap">
+              <table class="staff-table expat-table" id="expat-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Employee</th>
+                    <th scope="col">Nationality</th>
+                    <th scope="col">Passport</th>
+                    <th scope="col">Work permit</th>
+                    <th scope="col">Accommodation</th>
+                    <th scope="col" class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="expat-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty" id="expat-empty" hidden>
+              <p>No expatriates on the register yet.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-reports" aria-label="HR reports" hidden>
+          <section class="panel no-print" aria-labelledby="reports-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="reports-title">HR reports</h2>
+                <p class="panel-sub">Search for an employee to see every record held for them.</p>
+              </div>
+              <button class="btn btn-quiet" id="report-print-btn" type="button" hidden>Print report</button>
+            </div>
+            <div class="report-search">
+              <div class="search search-wide">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7"></circle>
+                  <path d="m20 20-3.5-3.5"></path>
+                </svg>
+                <input id="report-search" type="search" placeholder="Search by name, staff ID or department" autocomplete="off" aria-label="Search for an employee report">
+              </div>
+              <div class="report-results" id="report-results"></div>
+            </div>
+          </section>
+
+          <p class="empty" id="report-empty">Search for an employee to open their full HR report.</p>
+          <section class="report-sheet" id="report-sheet" hidden aria-live="polite"></section>
+        </section>
+
+        <section class="view" id="view-reminders" aria-label="Reminders" hidden>
+          <div class="reminder-grid">
+            <section class="panel" aria-labelledby="birthdays-title">
+              <div class="panel-head">
+                <div>
+                  <h2 id="birthdays-title">Upcoming birthdays</h2>
+                  <p class="panel-sub" id="birthday-sub">&nbsp;</p>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="staff-table" id="birthday-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Employee</th>
+                      <th scope="col">Department</th>
+                      <th scope="col">Date</th>
+                      <th scope="col" class="num">Turns</th>
+                      <th scope="col" class="num">In</th>
+                    </tr>
+                  </thead>
+                  <tbody id="birthday-body"></tbody>
+                </table>
+              </div>
+              <div class="empty" id="birthday-empty" hidden>
+                <p>No birthdays in the next 60 days.</p>
+              </div>
+            </section>
+
+            <section class="panel" aria-labelledby="tasks-title">
+              <div class="panel-head">
+                <div>
+                  <h2 id="tasks-title">Tasks</h2>
+                  <p class="panel-sub" id="tasks-sub">&nbsp;</p>
+                </div>
+                <button class="btn btn-primary" id="add-reminder-btn" data-editor-only type="button">Add task</button>
+              </div>
+              <div class="table-wrap">
+                <table class="staff-table" id="tasks-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" class="check-col">Done</th>
+                      <th scope="col">Task</th>
+                      <th scope="col">Due</th>
+                      <th scope="col" class="actions-col">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tasks-body"></tbody>
+                </table>
+              </div>
+              <div class="empty" id="tasks-empty" hidden>
+                <p>No tasks yet. Add a reminder to keep track of deadlines.</p>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel" aria-labelledby="upcoming-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="upcoming-title">Upcoming dates</h2>
+                <p class="panel-sub" id="upcoming-sub">&nbsp;</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="staff-table" id="upcoming-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Employee</th>
+                    <th scope="col">Department</th>
+                    <th scope="col">Milestone</th>
+                    <th scope="col">Date</th>
+                    <th scope="col" class="num">In</th>
+                  </tr>
+                </thead>
+                <tbody id="upcoming-body"></tbody>
+              </table>
+            </div>
+            <div class="empty" id="upcoming-empty" hidden>
+              <p>Nothing due in the next 90 days.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-departments" aria-label="Departments" hidden>
+          <section class="panel" aria-labelledby="departments-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="departments-title">Departments</h2>
+                <p class="panel-sub" id="departments-sub">&nbsp;</p>
+              </div>
+              <button class="btn btn-primary" id="add-department-btn" data-editor-only type="button">Add department</button>
+            </div>
+
+            <div class="table-wrap">
+              <table class="staff-table" id="departments-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Department</th>
+                    <th scope="col">Head of department</th>
+                    <th scope="col">Units</th>
+                    <th scope="col" class="num">Staff</th>
+                    <th scope="col" class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="departments-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-payroll" aria-label="Payroll" hidden>
+          <section class="panel" aria-labelledby="payroll-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="payroll-title">Payroll</h2>
+                <p class="panel-sub" id="payroll-sub">&nbsp;</p>
+              </div>
+              <button class="btn btn-primary" id="new-payroll-btn" data-editor-only type="button">New payroll run</button>
+            </div>
+
+            <div class="table-wrap">
+              <table class="staff-table" id="payroll-runs-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Period</th>
+                    <th scope="col" class="num">Staff</th>
+                    <th scope="col" class="num">Gross</th>
+                    <th scope="col" class="num">SSNIT 5.5%</th>
+                    <th scope="col" class="num">PAYE</th>
+                    <th scope="col" class="num">Net pay</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="payroll-runs-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty" id="payroll-empty" hidden>
+              <p>No payroll runs yet. Create one to pay every active employee who has a basic salary.</p>
+            </div>
+          </section>
+
+          <section class="panel" id="payroll-run-panel" aria-labelledby="payroll-run-title" hidden>
+            <div class="panel-head">
+              <div>
+                <h2 id="payroll-run-title">Payroll run</h2>
+                <p class="panel-sub" id="payroll-run-sub">&nbsp;</p>
+              </div>
+              <div class="panel-actions">
+                <span id="payroll-run-status"></span>
+                <button class="btn btn-quiet" id="payroll-approve-btn" type="button" hidden>Approve payroll</button>
+                <button class="btn btn-quiet" id="payroll-reopen-btn" type="button" hidden>Reopen</button>
+                <button class="btn btn-danger" id="payroll-delete-btn" data-editor-only type="button" hidden>Delete draft</button>
+              </div>
+            </div>
+
+            <div class="payroll-summary" id="payroll-summary"></div>
+            <div class="payroll-warnings" id="payroll-warnings" hidden></div>
+
+            <div class="table-wrap">
+              <table class="staff-table payroll-table" id="payroll-items-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Staff ID</th>
+                    <th scope="col">Name</th>
+                    <th scope="col" class="num">Basic</th>
+                    <th scope="col" class="num">Allowances</th>
+                    <th scope="col" class="num">Gross</th>
+                    <th scope="col" class="num">SSNIT 5.5%</th>
+                    <th scope="col" class="num">PAYE</th>
+                    <th scope="col" class="num">Other ded.</th>
+                    <th scope="col" class="num">Net pay</th>
+                    <th scope="col" class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="payroll-items-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty" id="payroll-items-empty" hidden>
+              <p>This run has no payslips.</p>
+            </div>
+          </section>
+
+          <section class="payslip-wrap" id="payslip-wrap" hidden>
+            <div class="panel payslip-toolbar">
+              <div>
+                <h2>Payslip preview</h2>
+                <p class="panel-sub">Ready to print or save as PDF.</p>
+              </div>
+              <div class="panel-actions">
+                <button class="btn btn-quiet" id="payslip-print-btn" type="button">Print payslip</button>
+                <button class="btn btn-quiet" id="payslip-close-btn" type="button">Close</button>
+              </div>
+            </div>
+            <section class="payslip-sheet" id="payslip-sheet" aria-live="polite"></section>
+          </section>
+        </section>
+
+        <section class="view" id="view-leave" aria-label="Leave" hidden>
+          <section class="panel" aria-labelledby="leave-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="leave-title">Leave</h2>
+                <p class="panel-sub" id="leave-sub">&nbsp;</p>
+              </div>
+              <div class="panel-actions">
+                <label class="leave-year">
+                  <span>Year</span>
+                  <select id="leave-year"></select>
+                </label>
+                <button class="btn btn-primary" id="new-leave-btn" data-editor-only type="button">New request</button>
+              </div>
+            </div>
+
+            <div class="payroll-summary" id="leave-balance-strip" hidden></div>
+
+            <div class="table-wrap">
+              <table class="staff-table leave-table" id="leave-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Employee</th>
+                    <th scope="col">Department</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Dates</th>
+                    <th scope="col" class="num">Days</th>
+                    <th scope="col">Department head</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="leave-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty" id="leave-empty" hidden>
+              <p id="leave-empty-text">No leave requests for this year.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-bank" aria-label="Bank and SSNIT details" hidden>
+          <section class="panel" aria-labelledby="bank-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="bank-title">Bank &amp; SSNIT</h2>
+                <p class="panel-sub" id="bank-sub">&nbsp;</p>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="staff-table bank-table" id="bank-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Staff ID</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Department</th>
+                    <th scope="col">Bank</th>
+                    <th scope="col">Branch</th>
+                    <th scope="col">Account name</th>
+                    <th scope="col">Account number</th>
+                    <th scope="col">SSNIT number</th>
+                    <th scope="col" class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="bank-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty" id="bank-empty" hidden>
+              <p>No staff records yet. Add an employee to record bank details.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-users" aria-label="Users and roles" hidden>
+          <section class="panel" aria-labelledby="users-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="users-title">Users &amp; roles</h2>
+                <p class="panel-sub" id="users-sub">&nbsp;</p>
+              </div>
+              <button class="btn btn-primary" id="add-user-btn" type="button">Add user</button>
+            </div>
+
+            <div class="table-wrap">
+              <table class="staff-table users-table" id="users-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Username</th>
+                    <th scope="col">Role</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Last sign-in</th>
+                    <th scope="col" class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="users-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty" id="users-empty" hidden>
+              <p>No user accounts found.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-admin" aria-label="Admin" hidden>
+          <section class="panel" aria-labelledby="admin-backups-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="admin-backups-title">Backup &amp; restore</h2>
+                <p class="panel-sub" id="admin-backups-sub">&nbsp;</p>
+              </div>
+              <button class="btn btn-primary" id="admin-backup-btn" type="button">Back up now</button>
+            </div>
+
+            <div class="table-wrap">
+              <table class="staff-table" id="admin-backups-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Snapshot</th>
+                    <th scope="col">Size</th>
+                    <th scope="col">Created</th>
+                    <th scope="col" class="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-backups-body"></tbody>
+              </table>
+            </div>
+
+            <div class="empty" id="admin-backups-empty" hidden>
+              <p>No backups yet. Create one before making big changes.</p>
+            </div>
+
+            <p class="panel-note">
+              Snapshots include employees, accounts, departments, training, health records, reminders and the company name. The logo file is not included. Restoring signs everyone out.
+            </p>
+          </section>
+
+          <div class="admin-grid">
+            <section class="panel" aria-labelledby="admin-brand-title">
+              <div class="panel-head">
+                <div>
+                  <h2 id="admin-brand-title">Company name &amp; logo</h2>
+                  <p class="panel-sub">Shown on the sidebar and sign-in page.</p>
+                </div>
+              </div>
+              <div class="admin-brand">
+                <img class="logo-preview admin-logo" id="admin-logo-preview" src="/api/logo" alt="Current logo">
+                <div class="cell-stack">
+                  <span class="cell-sub">Company name</span>
+                  <strong id="admin-company-name">Docker HRMS</strong>
+                </div>
+              </div>
+              <div class="admin-actions">
+                <button class="btn btn-quiet" id="admin-company-btn" type="button">Edit name</button>
+                <button class="btn btn-quiet" id="admin-logo-btn" type="button">Replace logo</button>
+              </div>
+            </section>
+
+            <section class="panel" aria-labelledby="admin-roles-title">
+              <div class="panel-head">
+                <div>
+                  <h2 id="admin-roles-title">Roles &amp; access</h2>
+                  <p class="panel-sub" id="admin-roles-sub">&nbsp;</p>
+                </div>
+                <a class="btn btn-quiet" href="/users" data-route>Manage users</a>
+              </div>
+              <div class="table-wrap">
+                <table class="staff-table" id="admin-roles-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Account</th>
+                      <th scope="col">Role</th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-roles-body"></tbody>
+                </table>
+              </div>
+              <p class="panel-note">
+                Administrators manage settings and accounts; HR users edit records and approve leave; department heads recommend leave for staff in departments they head; nurses add and remove health records only; viewers can only read.
+              </p>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog class="modal modal-lg" id="employee-dialog" aria-labelledby="employee-dialog-title">
+    <form class="modal-card" id="employee-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="employee-dialog-title">Add employee</h2>
+          <p class="muted" id="employee-dialog-sub">Create a full personnel record.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <div class="dialog-tabs" role="tablist" aria-label="Employee sections">
+        <button type="button" class="tab-btn active" data-tab="personal" role="tab" aria-selected="true">Personal</button>
+        <button type="button" class="tab-btn" data-tab="employment" role="tab" aria-selected="false">Employment</button>
+        <button type="button" class="tab-btn" data-tab="family" role="tab" aria-selected="false">Family</button>
+        <button type="button" class="tab-btn" data-tab="banking" role="tab" aria-selected="false">Banking</button>
+        <button type="button" class="tab-btn" data-tab="education" role="tab" aria-selected="false">Education &amp; experience</button>
+        <button type="button" class="tab-btn" data-tab="health" role="tab" aria-selected="false">Health &amp; referees</button>
+        <button type="button" class="tab-btn" data-tab="files" role="tab" aria-selected="false">Photo &amp; documents</button>
+      </div>
+
+      <div class="tab-pane" data-pane="personal">
+        <div class="form-grid">
+          <label class="field">
+            <span>Staff ID</span>
+            <input name="staffId" maxlength="30" readonly autocomplete="off" placeholder="Assigned automatically">
+            <em class="computed">Generated automatically when the record is saved.</em>
+          </label>
+          <label class="field">
+            <span>Full name *</span>
+            <input name="fullName" maxlength="80" required autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Date of birth</span>
+            <input name="dob" type="date">
+            <em class="computed" id="age-display">Age —</em>
+          </label>
+          <label class="field">
+            <span>Sex</span>
+            <select name="sex">
+              <option value="">Select</option>
+              <option value="Female">Female</option>
+              <option value="Male">Male</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Nationality</span>
+            <input name="nationality" maxlength="40" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Marital status</span>
+            <select name="maritalStatus">
+              <option value="">Select</option>
+              <option value="Single">Single</option>
+              <option value="Married">Married</option>
+              <option value="Divorced">Divorced</option>
+              <option value="Widowed">Widowed</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Phone number</span>
+            <input name="phone" maxlength="30" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Email</span>
+            <input name="email" type="email" maxlength="120" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>National ID type</span>
+            <select name="nationalIdType">
+              <option value="">Select</option>
+              <option value="Ghana Card">Ghana Card</option>
+              <option value="Passport">Passport</option>
+              <option value="Driver’s licence">Driver’s licence</option>
+              <option value="Voter ID">Voter ID</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>National ID number</span>
+            <input name="nationalIdNumber" maxlength="40" autocomplete="off">
+          </label>
+          <label class="field wide">
+            <span>Residential address</span>
+            <input name="residentialAddress" maxlength="200" autocomplete="off">
+          </label>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="employment" hidden>
+        <div class="form-grid">
+          <label class="field">
+            <span>Job title *</span>
+            <input name="position" maxlength="80" required autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Department *</span>
+            <select name="department" required></select>
+          </label>
+          <label class="field">
+            <span>Unit</span>
+            <select name="unit"></select>
+          </label>
+          <label class="field">
+            <span>Employment type</span>
+            <select name="employmentType">
+              <option value="">Select</option>
+              <option value="Full-time">Full-time</option>
+              <option value="Part-time">Part-time</option>
+              <option value="Contract">Contract</option>
+              <option value="Casual">Casual</option>
+              <option value="Internship">Internship</option>
+              <option value="National Service">National Service</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Date joined *</span>
+            <input name="joinedOn" type="date" required>
+            <em class="computed" id="service-display">Service —</em>
+          </label>
+          <label class="field">
+            <span>Contract / service end date</span>
+            <input name="contractEnd" type="date">
+          </label>
+          <label class="field">
+            <span>Probation end date</span>
+            <input name="probationEnd" type="date">
+          </label>
+          <label class="field">
+            <span>Employment status</span>
+            <select name="status">
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Expatriate</span>
+            <span class="check-row">
+              <input name="isExpatriate" type="checkbox">
+              <span>Employee is an expatriate</span>
+            </span>
+          </label>
+        </div>
+
+        <p class="form-section-label">Leave</p>
+        <div class="form-grid">
+          <label class="field">
+            <span>Annual entitlement (days)</span>
+            <input name="leaveEntitlement" type="number" min="0" max="365" step="0.5">
+          </label>
+          <label class="field">
+            <span>Carried-in opening balance (days)</span>
+            <input name="leaveOpening" type="number" min="0" max="365" step="0.5">
+            <em class="computed">Days already used before the system</em>
+          </label>
+          <label class="field">
+            <span>Approved leave taken (this year)</span>
+            <em class="computed" id="leave-taken-display">—</em>
+          </label>
+          <label class="field">
+            <span>Pending approval</span>
+            <em class="computed" id="leave-pending-display">—</em>
+          </label>
+          <label class="field">
+            <span>Leave balance</span>
+            <em class="computed" id="balance-display">Balance —</em>
+          </label>
+          <label class="field">
+            <span>On leave now</span>
+            <em class="computed" id="current-leave-display">—</em>
+          </label>
+        </div>
+        <p class="hint">Taken, pending and balance come from leave requests — record them on the Leave page. These two fields only set the yearly entitlement and any days used before Docker HRMS.</p>
+
+        <p class="form-section-label">Payroll</p>
+        <div class="form-grid">
+          <label class="field">
+            <span>Basic salary (GHS)</span>
+            <input name="basicSalary" type="number" min="0" max="10000000" step="0.01" placeholder="0.00">
+          </label>
+          <label class="field">
+            <span>Housing allowance</span>
+            <input name="housingAllowance" type="number" min="0" max="10000000" step="0.01" placeholder="0.00">
+          </label>
+          <label class="field">
+            <span>Transport allowance</span>
+            <input name="transportAllowance" type="number" min="0" max="10000000" step="0.01" placeholder="0.00">
+          </label>
+          <label class="field">
+            <span>Other allowance</span>
+            <input name="otherAllowance" type="number" min="0" max="10000000" step="0.01" placeholder="0.00">
+            <em class="computed" id="gross-display">Gross —</em>
+          </label>
+        </div>
+        <p class="hint">Payroll runs include active staff with a basic salary. SSNIT (5.5% employee, 13% employer) and PAYE are calculated on each run.</p>
+      </div>
+
+      <div class="tab-pane" data-pane="family" hidden>
+        <div class="form-grid">
+          <label class="field">
+            <span>Father’s name</span>
+            <input name="fatherName" maxlength="80" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Father’s contact</span>
+            <input name="fatherContact" maxlength="30" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Mother’s name</span>
+            <input name="motherName" maxlength="80" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Mother’s contact</span>
+            <input name="motherContact" maxlength="30" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Spouse name</span>
+            <input name="spouseName" maxlength="80" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Spouse contact</span>
+            <input name="spouseContact" maxlength="30" autocomplete="off">
+          </label>
+        </div>
+
+        <p class="form-section-label">Next of kin</p>
+        <div class="form-grid">
+          <label class="field">
+            <span>Name</span>
+            <input name="nextOfKinName" maxlength="80" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Relationship</span>
+            <input name="nextOfKinRelationship" maxlength="40" autocomplete="off">
+          </label>
+          <label class="field wide">
+            <span>Contact</span>
+            <input name="nextOfKinContact" maxlength="30" autocomplete="off">
+          </label>
+        </div>
+
+        <p class="form-section-label">Emergency contact</p>
+        <div class="form-grid">
+          <label class="field">
+            <span>Name</span>
+            <input name="emergencyName" maxlength="80" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Relationship</span>
+            <input name="emergencyRelationship" maxlength="40" autocomplete="off">
+          </label>
+          <label class="field wide">
+            <span>Contact</span>
+            <input name="emergencyContact" maxlength="30" autocomplete="off">
+          </label>
+        </div>
+
+        <p class="form-section-label">Dependants</p>
+        <div class="row-list" id="dependants-rows"></div>
+        <button class="btn btn-quiet btn-sm" type="button" id="add-dependant">Add dependant</button>
+      </div>
+
+      <div class="tab-pane" data-pane="banking" hidden>
+        <div class="form-grid">
+          <label class="field">
+            <span>Bank</span>
+            <input name="bankName" maxlength="60" list="bank-options" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Sort code / branch code</span>
+            <input name="bankBranch" maxlength="60" autocomplete="off">
+          </label>
+          <label class="field wide">
+            <span>Account name</span>
+            <input name="accountName" maxlength="80" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Full account number</span>
+            <input name="accountNumber" maxlength="24" inputmode="numeric" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>SSNIT number</span>
+            <input name="ssnitNumber" maxlength="11" autocomplete="off" placeholder="C1234567890">
+          </label>
+          <label class="field">
+            <span>TIN number</span>
+            <input name="tinNumber" maxlength="20" autocomplete="off">
+          </label>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="education" hidden>
+        <p class="form-section-label">Educational background</p>
+        <div class="row-list" id="education-rows"></div>
+        <button class="btn btn-quiet btn-sm" type="button" id="add-education">Add education</button>
+
+        <p class="form-section-label">Work experience</p>
+        <div class="row-list" id="experience-rows"></div>
+        <button class="btn btn-quiet btn-sm" type="button" id="add-experience">Add work experience</button>
+      </div>
+
+      <div class="tab-pane" data-pane="health" hidden>
+        <div class="form-grid">
+          <label class="field">
+            <span>Blood group</span>
+            <select name="bloodGroup">
+              <option value="">Select</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="Unknown">Unknown</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Known allergies</span>
+            <input name="allergies" maxlength="200" autocomplete="off" placeholder="e.g. Penicillin">
+          </label>
+          <label class="field wide">
+            <span>Health issues or medical conditions</span>
+            <textarea name="medicalConditions" maxlength="200" rows="3" placeholder="Ongoing conditions the HR team should know about"></textarea>
+          </label>
+        </div>
+
+        <p class="form-section-label">Referees</p>
+        <div class="row-list" id="referee-rows"></div>
+        <button class="btn btn-quiet btn-sm" type="button" id="add-referee">Add referee</button>
+      </div>
+
+      <div class="tab-pane" data-pane="files" hidden>
+        <div class="photo-row">
+          <div class="photo-box">
+            <img id="employee-photo" alt="Employee passport photo" hidden>
+            <span class="photo-fallback" id="employee-photo-fallback">Photo</span>
+          </div>
+          <div class="photo-actions">
+            <label class="field">
+              <span>Passport photo</span>
+              <input type="file" id="employee-photo-file" accept="image/png,image/jpeg,image/webp">
+            </label>
+            <button class="btn btn-quiet btn-sm" type="button" id="employee-photo-remove">Remove photo</button>
+            <p class="hint">PNG, JPG or WebP, up to 2 MB. The photo is saved with the employee record.</p>
+          </div>
+        </div>
+
+        <p class="form-section-label">Documents</p>
+        <div id="document-upload-box">
+          <div class="form-grid">
+            <label class="field">
+              <span>Document title</span>
+              <input id="document-title" maxlength="80" placeholder="e.g. Signed contract" autocomplete="off">
+            </label>
+            <label class="field">
+              <span>File</span>
+              <input type="file" id="document-file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain">
+            </label>
+          </div>
+          <button class="btn btn-quiet btn-sm" type="button" id="document-upload-btn">Upload document</button>
+          <p class="hint" id="document-error" role="alert" hidden></p>
+        </div>
+        <p class="hint" id="document-hint">Save the employee first to attach documents.</p>
+        <div class="doc-list" id="document-list"></div>
+      </div>
+
+      <p class="form-error" id="employee-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="employee-submit">Add employee</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="department-dialog" aria-labelledby="department-dialog-title">
+    <form class="modal-card" id="department-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="department-dialog-title">Add department</h2>
+          <p class="muted" id="department-dialog-sub">Create a department and choose who leads it.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <label class="field">
+        <span>Department name *</span>
+        <input name="name" maxlength="60" required autocomplete="off">
+      </label>
+      <label class="field">
+        <span>Head of department</span>
+        <select name="headEmployeeId"></select>
+      </label>
+      <p class="hint">Any employee can be set as head. You can change this at any time.</p>
+
+      <p class="form-error" id="department-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="department-submit">Add department</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="bank-dialog" aria-labelledby="bank-dialog-title">
+    <form class="modal-card" id="bank-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="bank-dialog-title">Bank &amp; SSNIT</h2>
+          <p class="muted" id="bank-dialog-sub">Payment details for this employee.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <div class="form-grid">
+        <label class="field wide">
+          <span>Bank</span>
+          <input name="bankName" maxlength="60" list="bank-options" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Branch</span>
+          <input name="bankBranch" maxlength="60" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>SSNIT number</span>
+          <input name="ssnitNumber" maxlength="11" autocomplete="off" placeholder="C1234567890">
+        </label>
+        <label class="field wide">
+          <span>Account name</span>
+          <input name="accountName" maxlength="80" autocomplete="off">
+        </label>
+        <label class="field wide">
+          <span>Account number</span>
+          <input name="accountNumber" maxlength="24" inputmode="numeric" autocomplete="off">
+        </label>
+      </div>
+      <p class="hint">Leave a field blank to clear it.</p>
+
+      <p class="form-error" id="bank-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="bank-submit">Save details</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="training-dialog" aria-labelledby="training-dialog-title">
+    <form class="modal-card" id="training-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="training-dialog-title">Add training</h2>
+          <p class="muted" id="training-dialog-sub">Record a training session for an employee.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <div class="form-grid">
+        <label class="field wide">
+          <span>Employee *</span>
+          <select name="employeeId" required></select>
+        </label>
+        <label class="field wide">
+          <span>Training title *</span>
+          <input name="title" maxlength="100" required autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Date of training *</span>
+          <input name="completedOn" type="date" required>
+        </label>
+        <label class="field">
+          <span>Duration</span>
+          <input name="duration" maxlength="40" placeholder="e.g. 2 days" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Facilitator</span>
+          <input name="facilitator" maxlength="80" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Venue</span>
+          <input name="venue" maxlength="80" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Employee score</span>
+          <input name="score" type="number" min="0" max="100" step="0.5" placeholder="0 – 100">
+        </label>
+        <label class="field">
+          <span>Certificate issued</span>
+          <select name="certificateIssued">
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </label>
+        <label class="field wide">
+          <span>Remarks</span>
+          <textarea name="remarks" maxlength="300" rows="2" placeholder="Optional notes"></textarea>
+        </label>
+      </div>
+
+      <p class="form-error" id="training-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="training-submit">Add training</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="health-dialog" aria-labelledby="health-dialog-title">
+    <form class="modal-card" id="health-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="health-dialog-title">Add health record</h2>
+          <p class="muted">Attach a document or picture if one exists.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <div class="form-grid">
+        <label class="field wide">
+          <span>Employee *</span>
+          <select name="employeeId" required></select>
+        </label>
+        <label class="field wide">
+          <span>Record title *</span>
+          <input name="title" maxlength="100" required autocomplete="off" placeholder="e.g. Annual medical">
+        </label>
+        <label class="field">
+          <span>Record date *</span>
+          <input name="recordDate" type="date" required>
+        </label>
+        <label class="field">
+          <span>Attachment</span>
+          <input type="file" id="health-file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain">
+        </label>
+        <label class="field wide">
+          <span>Notes</span>
+          <textarea name="notes" maxlength="1000" rows="3" placeholder="Findings, restrictions or follow-up"></textarea>
+        </label>
+      </div>
+
+      <p class="form-error" id="health-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="health-submit">Add record</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="expat-dialog" aria-labelledby="expat-dialog-title">
+    <form class="modal-card" id="expat-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="expat-dialog-title">Add expatriate</h2>
+          <p class="muted" id="expat-dialog-sub">Record passport, permit and accommodation details.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <label class="field">
+        <span>Employee *</span>
+        <select name="employeeId" id="expat-employee" required></select>
+      </label>
+
+      <div class="form-grid">
+        <label class="field">
+          <span>Nationality</span>
+          <input name="nationality" maxlength="40" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Passport number</span>
+          <input name="passportNumber" maxlength="30" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Passport expiry</span>
+          <input name="passportExpiry" type="date">
+        </label>
+        <label class="field">
+          <span>Work permit number</span>
+          <input name="workPermitNumber" maxlength="30" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Work permit expiry</span>
+          <input name="workPermitExpiry" type="date">
+        </label>
+        <label class="field">
+          <span>Accommodation</span>
+          <span class="check-row">
+            <input name="hasAccommodation" type="checkbox">
+            <span>Company provides accommodation</span>
+          </span>
+        </label>
+        <label class="field wide">
+          <span>Accommodation details</span>
+          <input name="accommodationDetails" maxlength="160" autocomplete="off">
+        </label>
+      </div>
+
+      <p class="form-error" id="expat-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="expat-submit">Save expatriate</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="reminder-dialog" aria-labelledby="reminder-dialog-title">
+    <form class="modal-card" id="reminder-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="reminder-dialog-title">Add task</h2>
+          <p class="muted">Reminders appear on the reminders page with birthdays.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <label class="field">
+        <span>Task *</span>
+        <input name="title" maxlength="100" required autocomplete="off" placeholder="e.g. Renew work permit">
+      </label>
+      <label class="field">
+        <span>Due date *</span>
+        <input name="dueOn" type="date" required>
+      </label>
+      <label class="field">
+        <span>Notes</span>
+        <textarea name="notes" maxlength="500" rows="3" placeholder="Optional details"></textarea>
+      </label>
+
+      <p class="form-error" id="reminder-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="reminder-submit">Add task</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="confirm-dialog" aria-labelledby="confirm-title">
+    <div class="modal-card">
+      <header class="modal-head">
+        <div>
+          <h2 id="confirm-title">Remove department?</h2>
+          <p class="muted" id="confirm-message"></p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+      <p class="form-error" id="confirm-error" role="alert" hidden></p>
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-danger" type="button" id="confirm-submit">Remove department</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="company-dialog" aria-labelledby="company-dialog-title">
+    <form class="modal-card" id="company-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="company-dialog-title">Company name</h2>
+          <p class="muted">Shown on the sidebar and sign-in page.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <label class="field">
+        <span>Company name</span>
+        <input name="companyName" maxlength="60" autocomplete="off" required>
+      </label>
+      <p class="hint">2 to 60 characters. The sidebar updates as soon as you save.</p>
+
+      <p class="form-error" id="company-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="company-submit">Save name</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="unit-dialog" aria-labelledby="unit-dialog-title">
+    <form class="modal-card" id="unit-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="unit-dialog-title">Add unit</h2>
+          <p class="muted" id="unit-dialog-sub"></p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+      <label class="field">
+        <span>Unit name</span>
+        <input name="unitName" maxlength="60" autocomplete="off" required>
+      </label>
+      <p class="hint">Units are optional groups inside a department, like Payroll or Recruitment.</p>
+      <p class="form-error" id="unit-error" role="alert" hidden></p>
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="unit-submit">Add unit</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="logo-dialog" aria-labelledby="logo-dialog-title">
+    <form class="modal-card" id="logo-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="logo-dialog-title">Replace logo</h2>
+          <p class="muted">Shown on the sign-in page and sidebar.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <div class="logo-preview-wrap">
+        <img class="logo-preview" id="logo-preview" src="/api/logo" alt="Current logo">
+      </div>
+
+      <label class="field">
+        <span>Image file</span>
+        <input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp">
+      </label>
+      <p class="hint">PNG, JPG or WebP, up to 1.5 MB. A square image works best.</p>
+
+      <p class="form-error" id="logo-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="logo-submit">Save logo</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="password-dialog" aria-labelledby="password-dialog-title">
+    <form class="modal-card" id="password-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="password-dialog-title">Change password</h2>
+          <p class="muted">Use at least 8 characters.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <label class="field">
+        <span>Current password</span>
+        <input name="currentPassword" type="password" autocomplete="current-password" required>
+      </label>
+      <label class="field">
+        <span>New password</span>
+        <input name="newPassword" type="password" autocomplete="new-password" required>
+      </label>
+      <label class="field">
+        <span>Confirm new password</span>
+        <input name="confirmPassword" type="password" autocomplete="new-password" required>
+      </label>
+
+      <p class="form-error" id="password-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="password-submit">Save password</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="user-dialog" aria-labelledby="user-dialog-title">
+    <form class="modal-card" id="user-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="user-dialog-title">Add user</h2>
+          <p class="muted" id="user-dialog-sub">Create an account and assign a role.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <label class="field">
+        <span>Full name *</span>
+        <input name="displayName" maxlength="80" required autocomplete="off">
+      </label>
+      <label class="field">
+        <span>Username *</span>
+        <input name="username" maxlength="40" required autocomplete="off" autocapitalize="none" spellcheck="false">
+      </label>
+      <p class="hint" id="user-username-hint">3–40 characters: lowercase letters, numbers, dot, dash or underscore.</p>
+      <label class="field">
+        <span>Role *</span>
+        <select name="role">
+          <option value="hr">HR — edit records and approve leave</option>
+          <option value="head">Department head — recommend leave</option>
+          <option value="nurse">Nurse — health records only</option>
+          <option value="viewer">Viewer — read only</option>
+          <option value="admin">Admin — full access</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Linked employee</span>
+        <select name="employeeId"></select>
+        <em class="computed" id="user-employee-hint">A department head account must be linked to an employee.</em>
+      </label>
+      <label class="field" id="user-password-field">
+        <span>Initial password *</span>
+        <input name="password" type="password" autocomplete="new-password" minlength="8">
+      </label>
+      <label class="field" id="user-active-field" hidden>
+        <span>Status</span>
+        <span class="check-row">
+          <input name="active" type="checkbox">
+          <span>Account is active</span>
+        </span>
+      </label>
+
+      <p class="form-error" id="user-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="user-submit">Add user</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="user-password-dialog" aria-labelledby="user-password-title">
+    <form class="modal-card" id="user-password-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="user-password-title">Reset password</h2>
+          <p class="muted" id="user-password-sub">Set a new password for this account.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <label class="field">
+        <span>New password *</span>
+        <input name="password" type="password" autocomplete="new-password" minlength="8" required>
+      </label>
+      <label class="field">
+        <span>Confirm new password *</span>
+        <input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required>
+      </label>
+
+      <p class="form-error" id="user-password-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="user-password-submit">Reset password</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="payroll-dialog" aria-labelledby="payroll-dialog-title">
+    <form class="modal-card" id="payroll-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="payroll-dialog-title">New payroll run</h2>
+          <p class="muted">Drafts every active employee who has a basic salary.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <label class="field">
+        <span>Pay period *</span>
+        <input name="period" type="month" required>
+      </label>
+      <p class="hint">One run per month. You can edit individual payslips before approving.</p>
+
+      <p class="form-error" id="payroll-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="payroll-submit">Create payroll</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="payslip-edit-dialog" aria-labelledby="payslip-edit-title">
+    <form class="modal-card" id="payslip-edit-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="payslip-edit-title">Edit payslip</h2>
+          <p class="muted" id="payslip-edit-sub"></p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <div class="form-grid">
+        <label class="field">
+          <span>Basic salary (GHS)</span>
+          <input name="basicSalary" type="number" min="0" max="10000000" step="0.01">
+        </label>
+        <label class="field">
+          <span>Housing allowance</span>
+          <input name="housingAllowance" type="number" min="0" max="10000000" step="0.01">
+        </label>
+        <label class="field">
+          <span>Transport allowance</span>
+          <input name="transportAllowance" type="number" min="0" max="10000000" step="0.01">
+        </label>
+        <label class="field">
+          <span>Other allowance</span>
+          <input name="otherAllowance" type="number" min="0" max="10000000" step="0.01">
+        </label>
+        <label class="field">
+          <span>Other deductions</span>
+          <input name="otherDeductions" type="number" min="0" max="10000000" step="0.01">
+        </label>
+        <label class="field">
+          <span>Deduction note</span>
+          <input name="otherDeductionNote" maxlength="120" autocomplete="off" placeholder="e.g. Staff loan">
+        </label>
+      </div>
+
+      <p class="payslip-preview" id="payslip-preview"></p>
+
+      <p class="form-error" id="payslip-edit-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="payslip-edit-submit">Save payslip</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="leave-dialog" aria-labelledby="leave-dialog-title">
+    <form class="modal-card" id="leave-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="leave-dialog-title">New leave request</h2>
+          <p class="muted">The department head recommends first, then HR approves.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <label class="field">
+        <span>Employee *</span>
+        <select name="employeeId" required></select>
+      </label>
+      <div class="form-grid">
+        <label class="field">
+          <span>Leave type *</span>
+          <select name="leaveType">
+            <option value="Annual">Annual</option>
+            <option value="Sick">Sick</option>
+            <option value="Maternity">Maternity</option>
+            <option value="Paternity">Paternity</option>
+            <option value="Study">Study</option>
+            <option value="Unpaid">Unpaid</option>
+            <option value="Compassionate">Compassionate</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Working days</span>
+          <em class="computed" id="leave-days-display">Pick start and end dates</em>
+        </label>
+        <label class="field">
+          <span>Start date *</span>
+          <input name="startOn" type="date" required>
+        </label>
+        <label class="field">
+          <span>End date *</span>
+          <input name="endOn" type="date" required>
+        </label>
+      </div>
+      <p class="hint" id="leave-balance-hint">Weekends are skipped; Monday to Friday are counted.</p>
+      <label class="field">
+        <span>Reason</span>
+        <textarea name="reason" rows="2" maxlength="200" placeholder="Optional details for the approvers"></textarea>
+      </label>
+
+      <p class="form-error" id="leave-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="leave-submit">Submit request</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-sm" id="leave-decision-dialog" aria-labelledby="leave-decision-title">
+    <form class="modal-card" id="leave-decision-form" novalidate>
+      <header class="modal-head">
+        <div>
+          <h2 id="leave-decision-title">Leave request</h2>
+          <p class="muted" id="leave-decision-sub"></p>
+        </div>
+        <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
+      </header>
+
+      <label class="field">
+        <span>Note (optional)</span>
+        <textarea name="note" rows="2" maxlength="200" placeholder="Visible on the request"></textarea>
+      </label>
+
+      <p class="form-error" id="leave-decision-error" role="alert" hidden></p>
+
+      <footer class="modal-actions">
+        <button class="btn btn-quiet" type="button" data-close>Cancel</button>
+        <button class="btn btn-primary" type="submit" id="leave-decision-submit">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <datalist id="bank-options"></datalist>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

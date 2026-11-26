@@ -190,7 +190,7 @@
             </div>
           </div>
 
-          <div class="attention-strip">
+          <div class="attention-strip" data-org-hidden>
             <a class="attention-card" href="/reminders" data-route>
               <span class="attention-label">Birthdays this week</span>
               <strong class="attention-value" id="attention-birthdays">—</strong>
@@ -208,10 +208,10 @@
             </a>
           </div>
 
-          <div class="stats">
+          <div class="stats" id="dashboard-stats">
             <article class="stat-card">
               <div class="stat-top">
-                <p class="stat-label">Total staff</p>
+                <p class="stat-label" id="stat-total-label">Total staff</p>
                 <span class="stat-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
@@ -226,7 +226,7 @@
             </article>
             <article class="stat-card">
               <div class="stat-top">
-                <p class="stat-label">Active staff</p>
+                <p class="stat-label" id="stat-active-label">Active staff</p>
                 <span class="stat-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
@@ -239,7 +239,7 @@
             </article>
             <article class="stat-card">
               <div class="stat-top">
-                <p class="stat-label">Training records</p>
+                <p class="stat-label" id="stat-training-label">Training records</p>
                 <span class="stat-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M2 4h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H2Z"></path>
@@ -252,7 +252,7 @@
             </article>
             <article class="stat-card">
               <div class="stat-top">
-                <p class="stat-label">Longest service</p>
+                <p class="stat-label" id="stat-longest-label">Longest service</p>
                 <span class="stat-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="8" r="6"></circle>
@@ -266,7 +266,7 @@
           </div>
 
           <section class="dashboard-summary-grid" aria-label="HR summaries">
-            <article class="panel summary-card" aria-labelledby="summary-workforce-title">
+            <article class="panel summary-card" id="summary-workforce-card" aria-labelledby="summary-workforce-title">
               <div class="panel-head">
                 <div>
                   <h2 id="summary-workforce-title">Workforce mix</h2>
@@ -306,6 +306,10 @@
                       <dd id="summary-leave-hr">0</dd>
                     </div>
                     <div>
+                      <dt>Awaiting GM</dt>
+                      <dd id="summary-leave-gm">0</dd>
+                    </div>
+                    <div>
                       <dt>Approved</dt>
                       <dd id="summary-leave-approved">0</dd>
                     </div>
@@ -315,7 +319,7 @@
               <p class="panel-note" id="summary-leave-today">&nbsp;</p>
             </article>
 
-            <article class="panel summary-card" aria-labelledby="summary-payroll-title" data-non-nurse>
+            <article class="panel summary-card" aria-labelledby="summary-payroll-title" data-no-payroll>
               <div class="panel-head">
                 <div>
                   <h2 id="summary-payroll-title">Latest payroll</h2>
@@ -816,7 +820,7 @@
                   <span>Year</span>
                   <select id="leave-year"></select>
                 </label>
-                <button class="btn btn-primary" id="new-leave-btn" data-editor-only type="button">New request</button>
+                <button class="btn btn-primary" id="new-leave-btn" type="button">New request</button>
               </div>
             </div>
 
@@ -987,7 +991,7 @@
                 </table>
               </div>
               <p class="panel-note">
-                Administrators manage settings and accounts; HR users edit records and approve leave; department heads recommend leave for staff in departments they head; nurses add and remove health records only; viewers can only read.
+                Administrators manage settings and accounts; HR users edit records and approve leave; department heads view only their department’s staff, training and leave and can recommend leave; nurses add and remove health records only; viewers can only read.
               </p>
             </section>
           </div>
@@ -1048,11 +1052,11 @@
       <div class="dialog-tabs" role="tablist" aria-label="Employee sections">
         <button type="button" class="tab-btn active" data-tab="personal" role="tab" aria-selected="true">Personal</button>
         <button type="button" class="tab-btn" data-tab="employment" role="tab" aria-selected="false">Employment</button>
-        <button type="button" class="tab-btn" data-tab="family" role="tab" aria-selected="false">Family</button>
-        <button type="button" class="tab-btn" data-tab="banking" role="tab" aria-selected="false">Banking</button>
-        <button type="button" class="tab-btn" data-tab="education" role="tab" aria-selected="false">Education &amp; experience</button>
-        <button type="button" class="tab-btn" data-tab="health" role="tab" aria-selected="false">Health &amp; referees</button>
-        <button type="button" class="tab-btn" data-tab="files" role="tab" aria-selected="false">Photo &amp; documents</button>
+        <button type="button" class="tab-btn" data-tab="family" role="tab" aria-selected="false" data-hod-hidden>Family</button>
+        <button type="button" class="tab-btn" data-tab="banking" role="tab" aria-selected="false" data-hod-hidden>Banking</button>
+        <button type="button" class="tab-btn" data-tab="education" role="tab" aria-selected="false" data-hod-hidden>Education &amp; experience</button>
+        <button type="button" class="tab-btn" data-tab="health" role="tab" aria-selected="false" data-hod-hidden>Health &amp; referees</button>
+        <button type="button" class="tab-btn" data-tab="files" role="tab" aria-selected="false" data-hod-hidden>Photo &amp; documents</button>
       </div>
 
       <div class="tab-pane" data-pane="personal">
@@ -1066,7 +1070,7 @@
             <span>Full name *</span>
             <input name="fullName" maxlength="80" required autocomplete="off">
           </label>
-          <label class="field">
+          <label class="field" data-hod-hidden>
             <span>Date of birth</span>
             <input name="dob" type="date">
             <em class="computed" id="age-display">Age —</em>
@@ -1101,7 +1105,7 @@
             <span>Email</span>
             <input name="email" type="email" maxlength="120" autocomplete="off">
           </label>
-          <label class="field">
+          <label class="field" data-hod-hidden>
             <span>National ID type</span>
             <select name="nationalIdType">
               <option value="">Select</option>
@@ -1112,11 +1116,11 @@
               <option value="Other">Other</option>
             </select>
           </label>
-          <label class="field">
+          <label class="field" data-hod-hidden>
             <span>National ID number</span>
             <input name="nationalIdNumber" maxlength="40" autocomplete="off">
           </label>
-          <label class="field wide">
+          <label class="field wide" data-hod-hidden>
             <span>Residential address</span>
             <input name="residentialAddress" maxlength="200" autocomplete="off">
           </label>
@@ -1174,7 +1178,7 @@
               <option value="Inactive">Inactive</option>
             </select>
           </label>
-          <label class="field">
+          <label class="field" data-hod-hidden>
             <span>Expatriate</span>
             <span class="check-row">
               <input name="isExpatriate" type="checkbox">
@@ -1213,30 +1217,32 @@
         </div>
         <p class="hint">Taken, pending and balance come from leave requests — record them on the Leave page. These two fields only set the yearly entitlement and any days used before Docker HRMS.</p>
 
-        <p class="form-section-label">Payroll</p>
-        <div class="form-grid">
-          <label class="field">
-            <span>Basic salary (GHS)</span>
-            <input name="basicSalary" type="number" min="0" max="10000000" step="0.01" placeholder="0.00">
-          </label>
-          <label class="field">
-            <span>Housing allowance</span>
-            <input name="housingAllowance" type="number" min="0" max="10000000" step="0.01" placeholder="0.00">
-          </label>
-          <label class="field">
-            <span>Transport allowance</span>
-            <input name="transportAllowance" type="number" min="0" max="10000000" step="0.01" placeholder="0.00">
-          </label>
-          <label class="field">
-            <span>Other allowance</span>
-            <input name="otherAllowance" type="number" min="0" max="10000000" step="0.01" placeholder="0.00">
-            <em class="computed" id="gross-display">Gross —</em>
-          </label>
+        <div data-hod-hidden>
+          <p class="form-section-label">Payroll</p>
+          <div class="form-grid">
+            <label class="field">
+              <span>Basic salary (GHS)</span>
+              <input name="basicSalary" type="number" min="0" max="10000000" step="0.01" placeholder="0.00">
+            </label>
+            <label class="field">
+              <span>Housing allowance</span>
+              <input name="housingAllowance" type="number" min="0" max="10000000" step="0.01" placeholder="0.00">
+            </label>
+            <label class="field">
+              <span>Transport allowance</span>
+              <input name="transportAllowance" type="number" min="0" max="10000000" step="0.01" placeholder="0.00">
+            </label>
+            <label class="field">
+              <span>Other allowance</span>
+              <input name="otherAllowance" type="number" min="0" max="10000000" step="0.01" placeholder="0.00">
+              <em class="computed" id="gross-display">Gross —</em>
+            </label>
+          </div>
+          <p class="hint">Payroll runs include active staff with a basic salary. Current SSNIT and PAYE rates are managed by an administrator on the Admin page.</p>
         </div>
-        <p class="hint">Payroll runs include active staff with a basic salary. Current SSNIT and PAYE rates are managed by an administrator on the Admin page.</p>
       </div>
 
-      <div class="tab-pane" data-pane="family" hidden>
+      <div class="tab-pane" data-pane="family" data-hod-hidden hidden>
         <div class="form-grid">
           <label class="field">
             <span>Father’s name</span>
@@ -1301,7 +1307,7 @@
         <button class="btn btn-quiet btn-sm" type="button" id="add-dependant">Add dependant</button>
       </div>
 
-      <div class="tab-pane" data-pane="banking" hidden>
+      <div class="tab-pane" data-pane="banking" data-hod-hidden hidden>
         <div class="form-grid">
           <label class="field">
             <span>Bank</span>
@@ -1330,7 +1336,7 @@
         </div>
       </div>
 
-      <div class="tab-pane" data-pane="education" hidden>
+      <div class="tab-pane" data-pane="education" data-hod-hidden hidden>
         <p class="form-section-label">Educational background</p>
         <div class="row-list" id="education-rows"></div>
         <button class="btn btn-quiet btn-sm" type="button" id="add-education">Add education</button>
@@ -1340,7 +1346,7 @@
         <button class="btn btn-quiet btn-sm" type="button" id="add-experience">Add work experience</button>
       </div>
 
-      <div class="tab-pane" data-pane="health" hidden>
+      <div class="tab-pane" data-pane="health" data-hod-hidden hidden>
         <div class="form-grid">
           <label class="field">
             <span>Blood group</span>
@@ -1372,7 +1378,7 @@
         <button class="btn btn-quiet btn-sm" type="button" id="add-referee">Add referee</button>
       </div>
 
-      <div class="tab-pane" data-pane="files" hidden>
+      <div class="tab-pane" data-pane="files" data-hod-hidden hidden>
         <div class="photo-row">
           <div class="photo-box">
             <img id="employee-photo" alt="Employee passport photo" hidden>
@@ -1829,7 +1835,10 @@
         <span>Role *</span>
         <select name="role">
           <option value="hr">HR — edit records and approve leave</option>
-          <option value="head">Department head — recommend leave</option>
+          <option value="head">Department head — department staff and leave recommendations</option>
+          <option value="employee">Employee — own profile and leave</option>
+          <option value="supervisor">Supervisor — department staff and leave requests</option>
+          <option value="gm">General manager — final HOD leave approval</option>
           <option value="nurse">Nurse — health records only</option>
           <option value="viewer">Viewer — read only</option>
           <option value="admin">Admin — full access</option>
@@ -1838,7 +1847,12 @@
       <label class="field">
         <span>Linked employee</span>
         <select name="employeeId"></select>
-        <em class="computed" id="user-employee-hint">A department head account must be linked to an employee.</em>
+        <em class="computed" id="user-employee-hint">Optional — links this account to a staff record.</em>
+      </label>
+      <label class="field" id="user-department-field" hidden>
+        <span>Assigned department *</span>
+        <select name="departmentId"></select>
+        <em class="computed">The supervisor can view staff and apply for leave in this department.</em>
       </label>
       <label class="field" id="user-password-field">
         <span>Initial password *</span>
@@ -1994,7 +2008,7 @@
       <header class="modal-head">
         <div>
           <h2 id="leave-dialog-title">New leave request</h2>
-          <p class="muted">The department head recommends first, then HR approves.</p>
+          <p class="muted" id="leave-dialog-sub">The department head recommends first, then HR approves.</p>
         </div>
         <button class="icon-btn" type="button" data-close aria-label="Close">×</button>
       </header>

@@ -161,11 +161,18 @@ function createSchema(target) {
     working_days REAL NOT NULL DEFAULT 0,
     reason TEXT,
     status TEXT NOT NULL DEFAULT 'Pending head',
+    gm_required INTEGER NOT NULL DEFAULT 0,
     requested_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     requested_at TEXT NOT NULL DEFAULT (datetime('now')),
     head_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     head_note TEXT,
     head_decided_at TEXT,
+    hr_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    hr_note TEXT,
+    hr_decided_at TEXT,
+    gm_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    gm_note TEXT,
+    gm_decided_at TEXT,
     decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     decided_at TEXT,
     decision_note TEXT
@@ -369,6 +376,21 @@ function migrateSchema() {
   ensureColumn('users', 'last_login_at', 'TEXT');
   ensureColumn('users', 'updated_at', 'TEXT');
   ensureColumn('users', 'employee_id', 'INTEGER');
+  ensureColumn('users', 'department_id', 'INTEGER REFERENCES departments(id) ON DELETE SET NULL');
+
+  ensureColumn('leave_requests', 'gm_required', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('leave_requests', 'hr_user_id', 'INTEGER');
+  ensureColumn('leave_requests', 'hr_note', 'TEXT');
+  ensureColumn('leave_requests', 'hr_decided_at', 'TEXT');
+  ensureColumn('leave_requests', 'gm_user_id', 'INTEGER');
+  ensureColumn('leave_requests', 'gm_note', 'TEXT');
+  ensureColumn('leave_requests', 'gm_decided_at', 'TEXT');
+  if (!getSetting('gm_leave_route_migrated')) {
+    db.prepare(
+      "UPDATE leave_requests SET gm_required = 1 WHERE status = 'Pending HR' AND head_employee_id = employee_id"
+    ).run();
+    setSetting('gm_leave_route_migrated', '1');
+  }
 
   for (const column of ['department', 'position', 'bank_name', 'bank_branch', 'account_name', 'account_number', 'ssnit_number']) {
     ensureColumn('payroll_items', column, 'TEXT');
@@ -646,8 +668,11 @@ function sessionUser(req) {
   if (!token) return null;
   const tokenHash = sha256(token);
   const row = db.prepare(
-    `SELECT u.id, u.username, u.display_name, u.role, u.active, u.employee_id, s.expires_at
-       FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.username, u.display_name, u.role, u.active, u.employee_id, u.department_id,
+            d.name AS department_name, s.expires_at
+       FROM sessions s
+       JOIN users u ON u.id = s.user_id
+       LEFT JOIN departments d ON d.id = u.department_id
       WHERE s.token_hash = ?`
   ).get(tokenHash);
   if (!row) return null;
@@ -665,6 +690,8 @@ function sessionUser(req) {
     displayName: row.display_name,
     role: row.role,
     employeeId: row.employee_id === null || row.employee_id === undefined ? null : Number(row.employee_id),
+    departmentId: row.department_id === null || row.department_id === undefined ? null : Number(row.department_id),
+    departmentName: row.department_name || '',
   };
 }
 
@@ -789,15 +816,46 @@ function readJson(req, limit = 64 * 1024) {
   });
 }
 
-function dashboardStats() {
-  const totals = db.prepare(
-    "SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN status = 'Active' THEN 1 ELSE 0 END), 0) AS active FROM employees"
-  ).get();
-  const training = db.prepare('SELECT COUNT(*) AS c FROM training_records').get().c;
-  const departments = db.prepare('SELECT COUNT(*) AS c FROM departments WHERE system = 0').get().c;
-  const longest = db.prepare(
-    "SELECT full_name, staff_id, joined_on FROM employees WHERE status = 'Active' ORDER BY joined_on ASC LIMIT 1"
-  ).get();
+function dashboardStats(user) {
+  const empty = { total: 0, active: 0, inactive: 0, training: 0, departments: 0, longest: null };
+  if (user.role === 'gm') return empty;
+
+  let totals;
+  let training;
+  let departments;
+  let longest;
+  if (user.role === 'employee') {
+    const employee = user.employeeId
+      ? db.prepare('SELECT id, full_name, staff_id, department, joined_on, status FROM employees WHERE id = ?').get(user.employeeId)
+      : null;
+    if (!employee) return empty;
+    totals = { total: 1, active: employee.status === 'Active' ? 1 : 0 };
+    training = db.prepare('SELECT COUNT(*) AS c FROM training_records WHERE employee_id = ?').get(employee.id).c;
+    departments = employee.department ? 1 : 0;
+    longest = employee.status === 'Active' ? employee : null;
+  } else {
+    const scope = departmentScope(user);
+    const staffFilter = scope ? `WHERE ${scope.sql}` : '';
+    totals = db.prepare(
+      `SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN status = 'Active' THEN 1 ELSE 0 END), 0) AS active
+         FROM employees ${staffFilter}`
+    ).get(...(scope ? scope.params : []));
+    const trainingScope = scope ? departmentScope(user, 'e.department') : null;
+    training = trainingScope
+      ? db.prepare(
+        `SELECT COUNT(*) AS c FROM training_records t
+           JOIN employees e ON e.id = t.employee_id
+          WHERE ${trainingScope.sql}`
+      ).get(...trainingScope.params).c
+      : db.prepare('SELECT COUNT(*) AS c FROM training_records').get().c;
+    departments = scope
+      ? scope.departments.length
+      : db.prepare('SELECT COUNT(*) AS c FROM departments WHERE system = 0').get().c;
+    const longestFilter = scope ? `WHERE status = 'Active' AND ${scope.sql}` : "WHERE status = 'Active'";
+    longest = db.prepare(
+      `SELECT full_name, staff_id, joined_on FROM employees ${longestFilter} ORDER BY joined_on ASC LIMIT 1`
+    ).get(...(scope ? scope.params : []));
+  }
 
   let longestInfo = null;
   if (longest) {
@@ -889,6 +947,39 @@ function requireAdmin(req, res) {
     return null;
   }
   return user;
+}
+
+function headedDepartmentNames(user) {
+  if (!user || user.role !== 'head' || !user.employeeId) return [];
+  return db.prepare('SELECT name FROM departments WHERE head_employee_id = ? ORDER BY name COLLATE NOCASE')
+    .all(user.employeeId).map((row) => row.name);
+}
+
+function supervisedDepartmentName(user) {
+  if (!user || user.role !== 'supervisor' || !user.departmentId) return null;
+  const row = db.prepare('SELECT name FROM departments WHERE id = ? AND system = 0').get(user.departmentId);
+  return row ? row.name : null;
+}
+
+function departmentScope(user, column = 'department') {
+  if (!user || !['head', 'supervisor'].includes(user.role)) return null;
+  const departments = user.role === 'head' ? headedDepartmentNames(user) : [supervisedDepartmentName(user)].filter(Boolean);
+  return {
+    departments,
+    sql: departments.length ? `${column} COLLATE NOCASE IN (${departments.map(() => '?').join(', ')})` : '0',
+    params: departments,
+  };
+}
+
+function canAccessEmployee(user, employee) {
+  if (!employee || !user) return false;
+  if (user.role === 'employee') return Number(employee.id) === Number(user.employeeId);
+  if (user.role === 'gm') return false;
+  if (['head', 'supervisor'].includes(user.role)) {
+    const department = String(employee.department || '').toLowerCase();
+    return departmentScope(user).departments.some((name) => name.toLowerCase() === department);
+  }
+  return true;
 }
 
 function listDepartments() {
@@ -1544,9 +1635,69 @@ function employeeProfile(id) {
   };
 }
 
-function employeeDirectory(query, department, status, employmentType) {
+function employeeProfileForDepartment(row, includeTraining = false) {
+  const balance = leaveBalanceFor(row.id, new Date().getFullYear());
+  const currentLeave = db.prepare(
+    `SELECT leave_type, start_on, end_on FROM leave_requests
+      WHERE employee_id = ? AND status = 'Approved' AND start_on <= ? AND end_on >= ?
+      ORDER BY start_on DESC, id DESC LIMIT 1`
+  ).get(row.id, todayIso(), todayIso());
+  const hasPhoto = Boolean(row.photo_data && row.photo_data.length);
+
+  return {
+    id: Number(row.id),
+    staffId: row.staff_id,
+    fullName: row.full_name,
+    department: row.department,
+    unit: row.unit || '',
+    position: row.position,
+    email: row.email || '',
+    phone: row.phone || '',
+    sex: row.sex || '',
+    nationality: row.nationality || '',
+    maritalStatus: row.marital_status || '',
+    employmentType: row.employment_type || '',
+    joinedOn: row.joined_on,
+    leavingOn: row.leaving_on || '',
+    yearsOfService: yearsSince(row.joined_on),
+    contractEnd: row.contract_end || '',
+    probationEnd: row.probation_end || '',
+    status: row.status,
+    leaveEntitlement: balance.entitlement,
+    leaveOpening: balance.opening,
+    leaveTaken: balance.taken,
+    leavePending: balance.pending,
+    leaveBalance: balance.remaining,
+    leaveBalanceYear: balance.year,
+    currentLeave: currentLeave
+      ? { type: currentLeave.leave_type, startOn: currentLeave.start_on, endOn: currentLeave.end_on }
+      : null,
+    hasPhoto,
+    photoUrl: hasPhoto ? `/api/employees/${row.id}/photo` : null,
+    dependants: [],
+    education: [],
+    experience: [],
+    referees: [],
+    documents: [],
+    training: includeTraining ? trainingForEmployee(row.id) : [],
+    healthRecords: [],
+  };
+}
+
+function employeeDirectory(query, department, status, employmentType, allowedDepartments = null, allowedEmployeeId = null) {
   const conditions = [];
   const params = [];
+  if (allowedEmployeeId !== null) {
+    if (!Number.isInteger(allowedEmployeeId) || allowedEmployeeId <= 0) return [];
+    conditions.push('id = ?');
+    params.push(allowedEmployeeId);
+  }
+  if (allowedDepartments) {
+    if (!allowedDepartments.length) return [];
+    const marks = allowedDepartments.map(() => '?').join(', ');
+    conditions.push(`department IN (${marks})`);
+    params.push(...allowedDepartments);
+  }
   const q = String(query || '').trim().slice(0, 80);
   if (q) {
     const pattern = `%${q.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
@@ -1597,8 +1748,13 @@ function employeeDirectory(query, department, status, employmentType) {
 function handleGetEmployee(req, res, id) {
   const user = requireUser(req, res);
   if (!user) return;
-  const profile = employeeProfile(id);
-  if (!profile) return sendJson(res, 404, { error: 'That employee no longer exists.' });
+  const row = db.prepare('SELECT * FROM employees WHERE id = ?').get(id);
+  if (!row || !canAccessEmployee(user, row)) {
+    return sendJson(res, 404, { error: 'That employee no longer exists.' });
+  }
+  const profile = ['head', 'supervisor'].includes(user.role)
+    ? employeeProfileForDepartment(row, user.role === 'head')
+    : employeeProfile(id);
   sendJson(res, 200, { employee: profile });
 }
 
@@ -1691,8 +1847,8 @@ async function handleSaveEmployee(req, res, id) {
 function handleEmployeePhoto(req, res, id) {
   const user = requireUser(req, res);
   if (!user) return;
-  const row = db.prepare('SELECT photo_mime, photo_data FROM employees WHERE id = ?').get(id);
-  if (!row || !row.photo_data) return sendText(res, 404, 'No photo.');
+  const row = db.prepare('SELECT department, photo_mime, photo_data FROM employees WHERE id = ?').get(id);
+  if (!row || !row.photo_data || !canAccessEmployee(user, row)) return sendText(res, 404, 'No photo.');
   sendBlob(res, row.photo_mime || 'image/jpeg', `employee-${id}`, Buffer.from(row.photo_data), true);
 }
 
@@ -1720,8 +1876,10 @@ async function handleUploadDocument(req, res, employeeId) {
 function handleDownloadDocument(req, res, id) {
   const user = requireUser(req, res);
   if (!user) return;
-  const row = db.prepare('SELECT filename, mime, data FROM employee_documents WHERE id = ?').get(id);
-  if (!row) return sendText(res, 404, 'Not found.');
+  const row = db.prepare('SELECT employee_id, filename, mime, data FROM employee_documents WHERE id = ?').get(id);
+  if (!row || (user.role === 'employee' && Number(row.employee_id) !== Number(user.employeeId))) {
+    return sendText(res, 404, 'Not found.');
+  }
   sendBlob(res, row.mime, row.filename, Buffer.from(row.data), false);
 }
 
@@ -1735,9 +1893,15 @@ function handleDeleteDocument(req, res, id) {
 
 /* ---------- Training ---------- */
 
-function trainingRows(url) {
+function trainingRows(url, user) {
   const conditions = [];
   const params = [];
+  const scope = departmentScope(user, 'e.department');
+  if (scope) {
+    if (!scope.departments.length) return [];
+    conditions.push(scope.sql);
+    params.push(...scope.params);
+  }
   const q = String(url.searchParams.get('q') || '').trim().slice(0, 80);
   if (q) {
     const pattern = `%${q.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
@@ -1803,7 +1967,7 @@ function readTrainingBody(body, errors) {
 function handleListTraining(req, res, url) {
   const user = requireUser(req, res);
   if (!user) return;
-  sendJson(res, 200, { training: trainingRows(url) });
+  sendJson(res, 200, { training: trainingRows(url, user) });
 }
 
 async function handleCreateTraining(req, res) {
@@ -1938,8 +2102,10 @@ async function handleCreateHealthRecord(req, res) {
 function handleHealthRecordFile(req, res, id) {
   const user = requireUser(req, res);
   if (!user) return;
-  const row = db.prepare('SELECT filename, mime, data FROM health_records WHERE id = ?').get(id);
-  if (!row || !row.data) return sendText(res, 404, 'No file.');
+  const row = db.prepare('SELECT employee_id, filename, mime, data FROM health_records WHERE id = ?').get(id);
+  if (!row || !row.data || (user.role === 'employee' && Number(row.employee_id) !== Number(user.employeeId))) {
+    return sendText(res, 404, 'No file.');
+  }
   const inline = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf'].includes(row.mime);
   sendBlob(res, row.mime, row.filename, Buffer.from(row.data), inline);
 }
@@ -2208,6 +2374,8 @@ async function handleSetup(req, res) {
       displayName,
       role: 'admin',
       employeeId: null,
+      departmentId: null,
+      departmentName: '',
     };
     token = createSession(user.id);
     db.exec('COMMIT');
@@ -2242,7 +2410,13 @@ async function handleLogin(req, res) {
     return sendJson(res, 429, { error: `Too many attempts. Try again in ${lockedFor} seconds.` });
   }
 
-  const user = db.prepare('SELECT id, username, password_hash, display_name, role, active, employee_id FROM users WHERE username = ?').get(username);
+  const user = db.prepare(
+    `SELECT u.id, u.username, u.password_hash, u.display_name, u.role, u.active, u.employee_id,
+            u.department_id, d.name AS department_name
+       FROM users u
+       LEFT JOIN departments d ON d.id = u.department_id
+      WHERE u.username = ?`
+  ).get(username);
   const passwordOk = verifyPassword(password, user ? user.password_hash : DUMMY_HASH);
   if (!user || Number(user.active) !== 1 || !passwordOk) {
     noteFailure(key);
@@ -2261,6 +2435,8 @@ async function handleLogin(req, res) {
       displayName: user.display_name,
       role: user.role,
       employeeId: user.employee_id === null || user.employee_id === undefined ? null : Number(user.employee_id),
+      departmentId: user.department_id === null || user.department_id === undefined ? null : Number(user.department_id),
+      departmentName: user.department_name || '',
     },
   });
 }
@@ -2282,6 +2458,8 @@ function handleMe(req, res) {
       displayName: user.displayName,
       role: user.role,
       employeeId: user.employeeId,
+      departmentId: user.departmentId,
+      departmentName: user.departmentName,
     },
   });
 }
@@ -2290,19 +2468,32 @@ function handleDashboard(req, res) {
   const user = requireUser(req, res);
   if (!user) return;
   sendJson(res, 200, {
-    stats: dashboardStats(),
-    attention: dashboardAttention(),
+    stats: dashboardStats(user),
+    attention: dashboardAttention(user),
     summary: dashboardSummary(user),
   });
 }
 
-function dashboardWorkforceSummary() {
+function dashboardWorkforceSummary(user) {
+  if (user.role === 'gm') {
+    return { active: 0, departments: [], expatriates: 0, contractsEndingSoon: 0 };
+  }
+  if (user.role === 'employee') {
+    const employee = user.employeeId
+      ? db.prepare("SELECT department FROM employees WHERE id = ? AND status = 'Active'").get(user.employeeId)
+      : null;
+    const groups = employee ? [{ department: employee.department, count: 1 }] : [];
+    return { active: groups.length, departments: groups, expatriates: 0, contractsEndingSoon: 0 };
+  }
+
+  const scope = departmentScope(user);
+  const filter = scope ? `WHERE status = 'Active' AND ${scope.sql}` : "WHERE status = 'Active'";
   const groups = db.prepare(
     `SELECT department, COUNT(*) AS count FROM employees
-      WHERE status = 'Active'
+      ${filter}
       GROUP BY department
       ORDER BY count DESC, department COLLATE NOCASE ASC`
-  ).all().map((row) => ({ department: row.department, count: Number(row.count) }));
+  ).all(...(scope ? scope.params : [])).map((row) => ({ department: row.department, count: Number(row.count) }));
   const departments = groups.slice(0, 4);
   const remaining = groups.slice(4);
   if (remaining.length) {
@@ -2312,52 +2503,73 @@ function dashboardWorkforceSummary() {
     });
   }
 
-  const today = todayIso();
-  const contractHorizon = toIsoDate(new Date(Date.now() + 60 * 86400000));
-  const expatriates = db.prepare(
-    "SELECT COUNT(*) AS count FROM employees WHERE status = 'Active' AND is_expatriate = 1"
-  ).get().count;
-  const contractsEndingSoon = db.prepare(
-    `SELECT COUNT(*) AS count FROM employees
-      WHERE status = 'Active' AND employment_type = 'Contract'
-        AND contract_end BETWEEN ? AND ?`
-  ).get(today, contractHorizon).count;
+  let expatriates = 0;
+  let contractsEndingSoon = 0;
+  if (!['head', 'supervisor'].includes(user.role)) {
+    const today = todayIso();
+    const contractHorizon = toIsoDate(new Date(Date.now() + 60 * 86400000));
+    expatriates = Number(db.prepare(
+      "SELECT COUNT(*) AS count FROM employees WHERE status = 'Active' AND is_expatriate = 1"
+    ).get().count);
+    contractsEndingSoon = Number(db.prepare(
+      `SELECT COUNT(*) AS count FROM employees
+        WHERE status = 'Active' AND employment_type = 'Contract'
+          AND contract_end BETWEEN ? AND ?`
+    ).get(today, contractHorizon).count);
+  }
 
   return {
     active: groups.reduce((sum, row) => sum + row.count, 0),
     departments,
-    expatriates: Number(expatriates),
-    contractsEndingSoon: Number(contractsEndingSoon),
+    expatriates,
+    contractsEndingSoon,
   };
 }
 
-function dashboardLeaveSummary() {
+function dashboardLeaveSummary(user) {
   const today = todayIso();
   const year = today.slice(0, 4);
+  let filter = "WHERE e.status = 'Active'";
+  let params = [];
+  if (user.role === 'employee') {
+    filter = 'WHERE e.id = ?';
+    params = [user.employeeId || 0];
+  } else if (user.role === 'gm') {
+    filter = 'WHERE l.gm_required = 1';
+  } else {
+    const scope = departmentScope(user, 'e.department');
+    if (scope) {
+      filter = `WHERE e.status = 'Active' AND ${scope.sql}`;
+      params = scope.params;
+    }
+  }
+
   const totals = db.prepare(
     `SELECT COALESCE(SUM(CASE WHEN l.status = 'Pending head' THEN 1 ELSE 0 END), 0) AS pending_head,
             COALESCE(SUM(CASE WHEN l.status = 'Pending HR' THEN 1 ELSE 0 END), 0) AS pending_hr,
+            COALESCE(SUM(CASE WHEN l.status = 'Pending GM' THEN 1 ELSE 0 END), 0) AS pending_gm,
             COALESCE(SUM(CASE WHEN l.status = 'Approved' AND substr(l.start_on, 1, 4) = ?
                                THEN 1 ELSE 0 END), 0) AS approved_year
        FROM leave_requests l
        JOIN employees e ON e.id = l.employee_id
-      WHERE e.status = 'Active'`
-  ).get(year);
+      ${filter}`
+  ).get(year, ...params);
   const onLeave = db.prepare(
     `SELECT COUNT(DISTINCT l.employee_id) AS count
        FROM leave_requests l
        JOIN employees e ON e.id = l.employee_id
-      WHERE e.status = 'Active' AND l.status = 'Approved'
-        AND l.start_on <= ? AND l.end_on >= ?`
-  ).get(today, today).count;
+      ${filter} AND l.status = 'Approved' AND l.start_on <= ? AND l.end_on >= ?`
+  ).get(...params, today, today).count;
   const pendingHead = Number(totals.pending_head);
   const pendingHr = Number(totals.pending_hr);
+  const pendingGm = Number(totals.pending_gm);
 
   return {
     year: Number(year),
-    pending: pendingHead + pendingHr,
+    pending: pendingHead + pendingHr + pendingGm,
     pendingHead,
     pendingHr,
+    pendingGm,
     approvedYear: Number(totals.approved_year),
     onLeaveToday: Number(onLeave),
   };
@@ -2392,15 +2604,25 @@ function dashboardPayrollSummary() {
 }
 
 function dashboardSummary(user) {
-  const summary = { workforce: dashboardWorkforceSummary() };
-  if (user.role !== 'nurse') {
-    summary.leave = dashboardLeaveSummary();
-    summary.payroll = dashboardPayrollSummary();
-  }
+  if (user.role === 'nurse') return { workforce: dashboardWorkforceSummary(user) };
+  const summary = {};
+  if (!['employee', 'gm'].includes(user.role)) summary.workforce = dashboardWorkforceSummary(user);
+  summary.leave = dashboardLeaveSummary(user);
+  if (['admin', 'hr', 'viewer'].includes(user.role)) summary.payroll = dashboardPayrollSummary();
   return summary;
 }
 
-function dashboardAttention() {
+function dashboardAttention(user) {
+  if (['head', 'employee', 'supervisor', 'gm'].includes(user.role)) {
+    return {
+      birthdays: 0,
+      expatriates: 0,
+      expiringPermits: 0,
+      expiredDocuments: 0,
+      openTasks: 0,
+      overdueTasks: 0,
+    };
+  }
   const reminders = reminderPayload();
   const expat = expatriatePayload();
   return {
@@ -2626,14 +2848,16 @@ async function handleChangePassword(req, res) {
 
 /* ---------- Users and roles ---------- */
 
-const USER_ROLES = ['admin', 'hr', 'head', 'nurse', 'viewer'];
+const USER_ROLES = ['admin', 'hr', 'head', 'employee', 'supervisor', 'gm', 'nurse', 'viewer'];
 
 function userRows() {
   return db.prepare(
     `SELECT u.id, u.username, u.display_name, u.role, u.active, u.created_at, u.last_login_at,
-            u.employee_id, e.full_name AS employee_name, e.department AS employee_department
+            u.employee_id, e.full_name AS employee_name, e.department AS employee_department,
+            u.department_id, d.name AS department_name
        FROM users u
        LEFT JOIN employees e ON e.id = u.employee_id
+       LEFT JOIN departments d ON d.id = u.department_id
       ORDER BY u.username COLLATE NOCASE ASC`
   ).all().map((row) => ({
     id: Number(row.id),
@@ -2646,6 +2870,8 @@ function userRows() {
     employeeId: row.employee_id === null || row.employee_id === undefined ? null : Number(row.employee_id),
     employeeName: row.employee_name || '',
     employeeDepartment: row.employee_department || '',
+    departmentId: row.department_id === null || row.department_id === undefined ? null : Number(row.department_id),
+    departmentName: row.department_name || '',
   }));
 }
 
@@ -2654,6 +2880,13 @@ function userEmployeeId(value) {
   const id = Number(value);
   if (!Number.isInteger(id) || id <= 0) return undefined;
   return db.prepare('SELECT id FROM employees WHERE id = ?').get(id) ? id : undefined;
+}
+
+function userDepartmentId(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const id = Number(value);
+  if (!Number.isInteger(id) || id <= 0) return undefined;
+  return db.prepare('SELECT id FROM departments WHERE id = ? AND system = 0').get(id) ? id : undefined;
 }
 
 function readUserRole(value) {
@@ -2703,8 +2936,15 @@ async function handleCreateUser(req, res) {
   if (employeeId === undefined) {
     return sendJson(res, 400, { error: 'Choose a valid employee to link.' });
   }
-  if (role === 'head' && !employeeId) {
-    return sendJson(res, 400, { error: 'A department head account must be linked to an employee.' });
+  if (['head', 'employee'].includes(role) && !employeeId) {
+    return sendJson(res, 400, { error: 'A department head or employee account must be linked to an employee.' });
+  }
+  const departmentId = role === 'supervisor' ? userDepartmentId(body.departmentId) : null;
+  if (departmentId === undefined) {
+    return sendJson(res, 400, { error: 'Choose a valid department.' });
+  }
+  if (role === 'supervisor' && !departmentId) {
+    return sendJson(res, 400, { error: 'A supervisor account must be assigned to a department.' });
   }
 
   if (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) {
@@ -2712,8 +2952,8 @@ async function handleCreateUser(req, res) {
   }
 
   const result = db.prepare(
-    'INSERT INTO users (username, password_hash, display_name, role, employee_id) VALUES (?, ?, ?, ?, ?)'
-  ).run(username, hashPassword(String(body.password)), displayName, role, employeeId);
+    'INSERT INTO users (username, password_hash, display_name, role, employee_id, department_id) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(username, hashPassword(String(body.password)), displayName, role, employeeId, departmentId);
   sendJson(res, 201, { user: userRows().find((row) => row.id === Number(result.lastInsertRowid)) });
 }
 
@@ -2721,7 +2961,9 @@ async function handleUpdateUser(req, res, id) {
   const admin = requireAdmin(req, res);
   if (!admin) return;
 
-  const current = db.prepare('SELECT id, username, display_name, role, active FROM users WHERE id = ?').get(id);
+  const current = db.prepare(
+    'SELECT id, username, display_name, role, active, employee_id, department_id FROM users WHERE id = ?'
+  ).get(id);
   if (!current) return sendJson(res, 404, { error: 'That user no longer exists.' });
 
   const body = await readJson(req);
@@ -2749,8 +2991,23 @@ async function handleUpdateUser(req, res, id) {
     employeeId = userEmployeeId(body.employeeId);
     if (employeeId === undefined) return sendJson(res, 400, { error: 'Choose a valid employee to link.' });
   }
-  if (role === 'head' && !employeeId) {
-    return sendJson(res, 400, { error: 'A department head account must be linked to an employee.' });
+  if (['head', 'employee'].includes(role) && !employeeId) {
+    return sendJson(res, 400, { error: 'A department head or employee account must be linked to an employee.' });
+  }
+
+  let departmentId = current.department_id === null || current.department_id === undefined
+    ? null
+    : Number(current.department_id);
+  if (role === 'supervisor') {
+    if (Object.prototype.hasOwnProperty.call(body, 'departmentId')) {
+      departmentId = userDepartmentId(body.departmentId);
+      if (departmentId === undefined) return sendJson(res, 400, { error: 'Choose a valid department.' });
+    }
+    if (!departmentId) {
+      return sendJson(res, 400, { error: 'A supervisor account must be assigned to a department.' });
+    }
+  } else {
+    departmentId = null;
   }
 
   if (isSelf && (!active || role !== 'admin')) {
@@ -2762,8 +3019,9 @@ async function handleUpdateUser(req, res, id) {
   }
 
   db.prepare(
-    "UPDATE users SET display_name = ?, role = ?, active = ?, employee_id = ?, updated_at = datetime('now') WHERE id = ?"
-  ).run(displayName, role, active ? 1 : 0, employeeId, id);
+    `UPDATE users SET display_name = ?, role = ?, active = ?, employee_id = ?, department_id = ?,
+            updated_at = datetime('now') WHERE id = ?`
+  ).run(displayName, role, active ? 1 : 0, employeeId, departmentId, id);
   if (!active) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);
 
   sendJson(res, 200, { user: userRows().find((row) => row.id === Number(id)) });
@@ -2794,7 +3052,9 @@ function handleListEmployees(req, res, url) {
     url.searchParams.get('q') || '',
     url.searchParams.get('department') || '',
     url.searchParams.get('status') || '',
-    url.searchParams.get('type') || ''
+    url.searchParams.get('type') || '',
+    ['head', 'supervisor'].includes(user.role) ? departmentScope(user).departments : null,
+    user.role === 'employee' ? (user.employeeId || 0) : null
   );
   sendJson(res, 200, { employees });
 }
@@ -2802,7 +3062,22 @@ function handleListEmployees(req, res, url) {
 function handleListDepartments(req, res) {
   const user = requireUser(req, res);
   if (!user) return;
-  sendJson(res, 200, { departments: listDepartments() });
+  let departments = listDepartments();
+  if (user.role === 'head') {
+    departments = departments.filter((department) => department.headEmployeeId === user.employeeId);
+  } else if (user.role === 'supervisor') {
+    departments = departments.filter((department) => department.id === user.departmentId && !department.system);
+  } else if (user.role === 'employee') {
+    const employee = user.employeeId
+      ? db.prepare('SELECT department FROM employees WHERE id = ?').get(user.employeeId)
+      : null;
+    departments = employee
+      ? departments.filter((department) => department.name.toLowerCase() === String(employee.department).toLowerCase())
+      : [];
+  } else if (user.role === 'gm') {
+    departments = [];
+  }
+  sendJson(res, 200, { departments });
 }
 
 function normalizeDepartmentName(value) {
@@ -3050,7 +3325,7 @@ async function handleUpdateBank(req, res, id) {
 /* ---------- Leave ---------- */
 
 const LEAVE_TYPES = ['Annual', 'Sick', 'Maternity', 'Paternity', 'Study', 'Unpaid', 'Compassionate'];
-const LEAVE_PENDING = ['Pending head', 'Pending HR'];
+const LEAVE_PENDING = ['Pending head', 'Pending HR', 'Pending GM'];
 
 function countWorkingDays(startOn, endOn) {
   const start = Date.parse(`${startOn}T00:00:00Z`);
@@ -3074,7 +3349,7 @@ function leaveBalanceFor(employeeId, year) {
   const sums = db.prepare(
     `SELECT
        COALESCE(SUM(CASE WHEN status = 'Approved' THEN working_days ELSE 0 END), 0) AS taken,
-       COALESCE(SUM(CASE WHEN status = 'Pending head' OR status = 'Pending HR' THEN working_days ELSE 0 END), 0) AS pending
+       COALESCE(SUM(CASE WHEN status IN ('Pending head', 'Pending HR', 'Pending GM') THEN working_days ELSE 0 END), 0) AS pending
      FROM leave_requests
     WHERE employee_id = ? AND substr(start_on, 1, 4) = ?`
   ).get(employeeId, String(year));
@@ -3100,7 +3375,7 @@ function departmentHeadFor(department) {
 }
 
 function userHeadsDepartment(user, department) {
-  if (!user.employeeId) return false;
+  if (!user || user.role !== 'head' || !user.employeeId) return false;
   return Boolean(
     db.prepare('SELECT 1 FROM departments WHERE name = ? COLLATE NOCASE AND head_employee_id = ?')
       .get(department, user.employeeId)
@@ -3110,13 +3385,18 @@ function userHeadsDepartment(user, department) {
 const LEAVE_QUERY = `
   SELECT l.*, e.staff_id, e.full_name,
          req.display_name AS requested_by_name,
+         req.role AS requested_by_role,
          hu.display_name AS head_by_name,
+         hru.display_name AS hr_by_name,
+         gmu.display_name AS gm_by_name,
          dec.display_name AS decided_by_name,
          he.full_name AS head_name
     FROM leave_requests l
     JOIN employees e ON e.id = l.employee_id
     LEFT JOIN users req ON req.id = l.requested_by
     LEFT JOIN users hu ON hu.id = l.head_user_id
+    LEFT JOIN users hru ON hru.id = l.hr_user_id
+    LEFT JOIN users gmu ON gmu.id = l.gm_user_id
     LEFT JOIN users dec ON dec.id = l.decided_by
     LEFT JOIN employees he ON he.id = l.head_employee_id`;
 
@@ -3137,12 +3417,20 @@ function leaveRequestPayload(row) {
     workingDays: round2(row.working_days),
     reason: row.reason || '',
     status: row.status,
+    gmRequired: Number(row.gm_required) === 1,
     requestedByName: row.requested_by_name || '',
+    requestedByRole: row.requested_by_role || '',
     requestedAt: row.requested_at,
     headName: row.head_name || '',
     headNote: row.head_note || '',
     headDecidedAt: row.head_decided_at || '',
     headByName: row.head_by_name || '',
+    hrByName: row.hr_by_name || '',
+    hrNote: row.hr_note || '',
+    hrDecidedAt: row.hr_decided_at || '',
+    gmByName: row.gm_by_name || '',
+    gmNote: row.gm_note || '',
+    gmDecidedAt: row.gm_decided_at || '',
     decidedByName: row.decided_by_name || '',
     decidedAt: row.decided_at || '',
     decisionNote: row.decision_note || '',
@@ -3153,7 +3441,7 @@ function overlappingLeave(employeeId, startOn, endOn, excludeId) {
   return db.prepare(
     `SELECT id FROM leave_requests
       WHERE employee_id = ? AND id <> ?
-        AND status IN ('Pending head', 'Pending HR', 'Approved')
+        AND status IN ('Pending head', 'Pending HR', 'Pending GM', 'Approved')
         AND start_on <= ? AND end_on >= ?
       LIMIT 1`
   ).get(employeeId, excludeId || 0, endOn, startOn);
@@ -3166,19 +3454,26 @@ function handleListLeave(req, res, url) {
   const year = /^\d{4}$/.test(requested) ? requested : String(new Date().getFullYear());
 
   let rows;
-  if (user.role === 'head') {
-    const departments = user.employeeId
-      ? db.prepare('SELECT name FROM departments WHERE head_employee_id = ?').all(user.employeeId).map((row) => row.name)
-      : [];
-    if (!departments.length) {
-      rows = [];
-    } else {
-      const marks = departments.map(() => '?').join(', ');
-      rows = db.prepare(
-        `${LEAVE_QUERY} WHERE substr(l.start_on, 1, 4) = ? AND l.department IN (${marks})
+  if (['head', 'supervisor'].includes(user.role)) {
+    const scope = departmentScope(user, 'e.department');
+    rows = scope.departments.length
+      ? db.prepare(
+        `${LEAVE_QUERY} WHERE substr(l.start_on, 1, 4) = ? AND ${scope.sql}
           ORDER BY l.start_on DESC, l.id DESC`
-      ).all(year, ...departments);
-    }
+      ).all(year, ...scope.params)
+      : [];
+  } else if (user.role === 'employee') {
+    rows = user.employeeId
+      ? db.prepare(
+        `${LEAVE_QUERY} WHERE substr(l.start_on, 1, 4) = ? AND l.employee_id = ?
+          ORDER BY l.start_on DESC, l.id DESC`
+      ).all(year, user.employeeId)
+      : [];
+  } else if (user.role === 'gm') {
+    rows = db.prepare(
+      `${LEAVE_QUERY} WHERE substr(l.start_on, 1, 4) = ? AND l.gm_required = 1
+        ORDER BY l.start_on DESC, l.id DESC`
+    ).all(year);
   } else {
     rows = db.prepare(
       `${LEAVE_QUERY} WHERE substr(l.start_on, 1, 4) = ? ORDER BY l.start_on DESC, l.id DESC`
@@ -3197,8 +3492,10 @@ function handleLeaveBalance(req, res, employeeId, url) {
   if (!user) return;
   const requested = String(url.searchParams.get('year') || '');
   const year = /^\d{4}$/.test(requested) ? requested : String(new Date().getFullYear());
-  const employee = db.prepare('SELECT id, staff_id, full_name FROM employees WHERE id = ?').get(employeeId);
-  if (!employee) return sendJson(res, 404, { error: 'That employee no longer exists.' });
+  const employee = db.prepare('SELECT id, staff_id, full_name, department FROM employees WHERE id = ?').get(employeeId);
+  if (!employee || !canAccessEmployee(user, employee)) {
+    return sendJson(res, 404, { error: 'That employee no longer exists.' });
+  }
   sendJson(res, 200, {
     employee: { id: Number(employee.id), staffId: employee.staff_id, fullName: employee.full_name },
     balance: leaveBalanceFor(employeeId, year),
@@ -3206,13 +3503,21 @@ function handleLeaveBalance(req, res, employeeId, url) {
 }
 
 async function handleCreateLeave(req, res) {
-  const user = requireEditor(req, res);
+  const user = requireUser(req, res);
   if (!user) return;
+  if (!['admin', 'hr', 'head', 'employee', 'supervisor'].includes(user.role)) {
+    return sendJson(res, 403, { error: 'Your account role cannot apply for leave.' });
+  }
 
   const body = await readJson(req);
   const employee = db.prepare('SELECT id, staff_id, full_name, department, status FROM employees WHERE id = ?')
     .get(Number(body.employeeId));
   if (!employee) return sendJson(res, 400, { error: 'Choose an employee.' });
+  const canApply = ['admin', 'hr'].includes(user.role)
+    || (user.role === 'employee' && Number(employee.id) === Number(user.employeeId))
+    || (user.role === 'head' && Number(employee.id) === Number(user.employeeId))
+    || (['head', 'supervisor'].includes(user.role) && canAccessEmployee(user, employee));
+  if (!canApply) return sendJson(res, 403, { error: 'You can only apply for leave within your assigned scope.' });
   if (employee.status !== 'Active') return sendJson(res, 400, { error: 'Only active employees can take leave.' });
 
   const leaveType = String(body.leaveType || '');
@@ -3254,16 +3559,19 @@ async function handleCreateLeave(req, res) {
   }
 
   const head = departmentHeadFor(employee.department);
-  const status = head && head.id !== Number(employee.id) ? 'Pending head' : 'Pending HR';
+  const targetIsHead = Boolean(head && head.id === Number(employee.id));
+  const appliedByHead = user.role === 'head' && Number(employee.id) !== Number(user.employeeId);
+  const status = targetIsHead || appliedByHead ? 'Pending HR' : 'Pending head';
+  const gmRequired = targetIsHead ? 1 : 0;
   const reason = String(body.reason || '').trim().slice(0, 200);
 
   const result = db.prepare(
     `INSERT INTO leave_requests
-       (employee_id, department, head_employee_id, leave_type, start_on, end_on, working_days, reason, status, requested_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (employee_id, department, head_employee_id, leave_type, start_on, end_on, working_days, reason, status, gm_required, requested_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     employee.id, employee.department, head ? head.id : null, leaveType,
-    startOn, endOn, workingDays, reason || null, status, user.id
+    startOn, endOn, workingDays, reason || null, status, gmRequired, user.id
   );
 
   sendJson(res, 201, { request: leaveRequestPayload(leaveRequestRow(Number(result.lastInsertRowid))) });
@@ -3272,37 +3580,63 @@ async function handleCreateLeave(req, res) {
 async function handleRecommendLeave(req, res, id) {
   const user = requireUser(req, res);
   if (!user) return;
-  const row = db.prepare('SELECT id, department, status FROM leave_requests WHERE id = ?').get(id);
-  if (!row) return sendJson(res, 404, { error: 'That leave request no longer exists.' });
-  if (row.status !== 'Pending head') {
-    return sendJson(res, 409, { error: 'This request is not waiting for the department head.' });
-  }
-  const allowed = user.role === 'admin' || user.role === 'hr' || userHeadsDepartment(user, row.department);
-  if (!allowed) {
-    return sendJson(res, 403, { error: 'Only the department head or HR can recommend this request.' });
-  }
-
   const body = await readJson(req);
   const note = String(body.note || '').trim().slice(0, 200);
-  db.prepare(
-    "UPDATE leave_requests SET status = 'Pending HR', head_user_id = ?, head_note = ?, head_decided_at = datetime('now') WHERE id = ?"
-  ).run(user.id, note || null, id);
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const row = db.prepare(
+      'SELECT l.id, e.department, l.status FROM leave_requests l JOIN employees e ON e.id = l.employee_id WHERE l.id = ?'
+    ).get(id);
+    if (!row) {
+      db.exec('ROLLBACK');
+      return sendJson(res, 404, { error: 'That leave request no longer exists.' });
+    }
+    if (row.status !== 'Pending head') {
+      db.exec('ROLLBACK');
+      return sendJson(res, 409, { error: 'This request is not waiting for the department head.' });
+    }
+    if (!userHeadsDepartment(user, row.department)) {
+      db.exec('ROLLBACK');
+      return sendJson(res, 403, { error: 'Only the assigned department head can recommend this request.' });
+    }
+    const result = db.prepare(
+      `UPDATE leave_requests
+          SET status = 'Pending HR', head_user_id = ?, head_note = ?, head_decided_at = datetime('now')
+        WHERE id = ? AND status = 'Pending head'`
+    ).run(user.id, note || null, id);
+    if (!Number(result.changes)) {
+      db.exec('ROLLBACK');
+      return sendJson(res, 409, { error: 'This request is no longer waiting for the department head.' });
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
 
   sendJson(res, 200, { request: leaveRequestPayload(leaveRequestRow(id)) });
 }
 
 async function handleConfirmLeave(req, res, id) {
-  const user = requireEditor(req, res);
+  const user = requireUser(req, res);
   if (!user) return;
   const row = db.prepare(
-    'SELECT id, employee_id, leave_type, start_on, end_on, working_days, status FROM leave_requests WHERE id = ?'
+    `SELECT id, employee_id, leave_type, start_on, end_on, working_days, status, gm_required
+       FROM leave_requests WHERE id = ?`
   ).get(id);
   if (!row) return sendJson(res, 404, { error: 'That leave request no longer exists.' });
   if (row.status === 'Pending head') {
     return sendJson(res, 409, { error: 'The department head has not recommended this request yet.' });
   }
-  if (row.status !== 'Pending HR') {
+  if (!['Pending HR', 'Pending GM'].includes(row.status)) {
     return sendJson(res, 409, { error: 'This request is already decided.' });
+  }
+  if (row.status === 'Pending HR' && !['admin', 'hr'].includes(user.role)) {
+    return sendJson(res, 403, { error: 'Only HR can preapprove or approve this request.' });
+  }
+  if (row.status === 'Pending GM' && (user.role !== 'gm' || Number(row.gm_required) !== 1)) {
+    return sendJson(res, 403, { error: 'Only the general manager can give final approval to HOD leave.' });
   }
   if (overlappingLeave(row.employee_id, row.start_on, row.end_on, row.id)) {
     return sendJson(res, 409, { error: 'Another request covering part of those dates was approved first.' });
@@ -3323,9 +3657,31 @@ async function handleConfirmLeave(req, res, id) {
 
   const body = await readJson(req);
   const note = String(body.note || '').trim().slice(0, 200);
-  db.prepare(
-    "UPDATE leave_requests SET status = 'Approved', decided_by = ?, decided_at = datetime('now'), decision_note = ? WHERE id = ?"
-  ).run(user.id, note || null, id);
+  let result;
+  if (row.status === 'Pending HR' && Number(row.gm_required) === 1) {
+    result = db.prepare(
+      `UPDATE leave_requests
+          SET status = 'Pending GM', hr_user_id = ?, hr_note = ?, hr_decided_at = datetime('now')
+        WHERE id = ? AND status = 'Pending HR' AND gm_required = 1`
+    ).run(user.id, note || null, id);
+  } else if (row.status === 'Pending HR') {
+    result = db.prepare(
+      `UPDATE leave_requests
+          SET status = 'Approved', hr_user_id = ?, hr_note = ?, hr_decided_at = datetime('now'),
+              decided_by = ?, decided_at = datetime('now'), decision_note = ?
+        WHERE id = ? AND status = 'Pending HR' AND gm_required = 0`
+    ).run(user.id, note || null, user.id, note || null, id);
+  } else {
+    result = db.prepare(
+      `UPDATE leave_requests
+          SET status = 'Approved', gm_user_id = ?, gm_note = ?, gm_decided_at = datetime('now'),
+              decided_by = ?, decided_at = datetime('now'), decision_note = ?
+        WHERE id = ? AND status = 'Pending GM' AND gm_required = 1`
+    ).run(user.id, note || null, user.id, note || null, id);
+  }
+  if (!Number(result.changes)) {
+    return sendJson(res, 409, { error: 'This request has already moved to another approval stage.' });
+  }
 
   sendJson(res, 200, { request: leaveRequestPayload(leaveRequestRow(id)) });
 }
@@ -3333,23 +3689,67 @@ async function handleConfirmLeave(req, res, id) {
 async function handleRejectLeave(req, res, id) {
   const user = requireUser(req, res);
   if (!user) return;
-  const row = db.prepare('SELECT id, department, status FROM leave_requests WHERE id = ?').get(id);
-  if (!row) return sendJson(res, 404, { error: 'That leave request no longer exists.' });
-  if (row.status !== 'Pending head' && row.status !== 'Pending HR') {
-    return sendJson(res, 409, { error: 'This request is already decided.' });
-  }
-
-  const isHr = user.role === 'admin' || user.role === 'hr';
-  const isHeadStep = row.status === 'Pending head' && userHeadsDepartment(user, row.department);
-  if (!isHr && !isHeadStep) {
-    return sendJson(res, 403, { error: 'Only HR or the department head can reject this request.' });
-  }
-
   const body = await readJson(req);
   const note = String(body.note || '').trim().slice(0, 200);
-  db.prepare(
-    "UPDATE leave_requests SET status = 'Rejected', decided_by = ?, decided_at = datetime('now'), decision_note = ? WHERE id = ?"
-  ).run(user.id, note || null, id);
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const row = db.prepare(
+      'SELECT l.id, e.department, l.status, l.gm_required FROM leave_requests l JOIN employees e ON e.id = l.employee_id WHERE l.id = ?'
+    ).get(id);
+    if (!row) {
+      db.exec('ROLLBACK');
+      return sendJson(res, 404, { error: 'That leave request no longer exists.' });
+    }
+    if (!['Pending head', 'Pending HR', 'Pending GM'].includes(row.status)) {
+      db.exec('ROLLBACK');
+      return sendJson(res, 409, { error: 'This request is already decided.' });
+    }
+    if (row.status === 'Pending head' && !userHeadsDepartment(user, row.department)) {
+      db.exec('ROLLBACK');
+      return sendJson(res, 403, { error: 'Only the assigned department head can decline this request.' });
+    }
+    if (row.status === 'Pending HR' && !['admin', 'hr'].includes(user.role)) {
+      db.exec('ROLLBACK');
+      return sendJson(res, 403, { error: 'Only HR can decline this request.' });
+    }
+    if (row.status === 'Pending GM' && (user.role !== 'gm' || Number(row.gm_required) !== 1)) {
+      db.exec('ROLLBACK');
+      return sendJson(res, 403, { error: 'Only the general manager can decline HOD leave.' });
+    }
+
+    let result;
+    if (row.status === 'Pending head') {
+      result = db.prepare(
+        `UPDATE leave_requests
+            SET status = 'Rejected', head_user_id = ?, head_note = ?, head_decided_at = datetime('now'),
+                decided_by = ?, decided_at = datetime('now'), decision_note = ?
+          WHERE id = ? AND status = 'Pending head'`
+      ).run(user.id, note || null, user.id, note || null, id);
+    } else if (row.status === 'Pending HR') {
+      result = db.prepare(
+        `UPDATE leave_requests
+            SET status = 'Rejected', hr_user_id = ?, hr_note = ?, hr_decided_at = datetime('now'),
+                decided_by = ?, decided_at = datetime('now'), decision_note = ?
+          WHERE id = ? AND status = 'Pending HR'`
+      ).run(user.id, note || null, user.id, note || null, id);
+    } else {
+      result = db.prepare(
+        `UPDATE leave_requests
+            SET status = 'Rejected', gm_user_id = ?, gm_note = ?, gm_decided_at = datetime('now'),
+                decided_by = ?, decided_at = datetime('now'), decision_note = ?
+          WHERE id = ? AND status = 'Pending GM' AND gm_required = 1`
+      ).run(user.id, note || null, user.id, note || null, id);
+    }
+    if (!Number(result.changes)) {
+      db.exec('ROLLBACK');
+      return sendJson(res, 409, { error: 'This request has already moved to another approval stage.' });
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
 
   sendJson(res, 200, { request: leaveRequestPayload(leaveRequestRow(id)) });
 }
@@ -3962,6 +4362,38 @@ function handleGetPayslip(req, res, id) {
   });
 }
 
+function limitedRoleMayUse(user, method, pathname) {
+  if (pathname === '/api/login' || pathname === '/api/logout' || pathname === '/api/me') return true;
+  if (pathname === '/api/change-password') return true;
+  if (pathname === '/api/setup-status' && method === 'GET') return true;
+  if ((pathname === '/api/branding' || pathname === '/api/logo') && method === 'GET') return true;
+  if (pathname === '/api/dashboard' && method === 'GET') return true;
+
+  if (user.role === 'gm') {
+    if (pathname === '/api/departments' && method === 'GET') return true;
+    if (pathname === '/api/leave' && method === 'GET') return true;
+    return /^\/api\/leave\/\d+\/(confirm|reject)$/.test(pathname) && method === 'POST';
+  }
+
+  if (pathname === '/api/employees' && method === 'GET') return true;
+  if (/^\/api\/employees\/\d+$/.test(pathname)) return method === 'GET';
+  if (/^\/api\/employees\/\d+\/photo$/.test(pathname)) return method === 'GET' || method === 'HEAD';
+  if (pathname === '/api/departments' && method === 'GET') return true;
+  if (pathname === '/api/leave' && method === 'GET') return true;
+  if (pathname === '/api/leave' && method === 'POST') return user.role !== 'gm';
+  if (/^\/api\/leave\/balance\/\d+$/.test(pathname)) return method === 'GET';
+
+  if (user.role === 'head') {
+    if (pathname === '/api/training' && method === 'GET') return true;
+    return /^\/api\/leave\/\d+\/(recommend|reject)$/.test(pathname) && method === 'POST';
+  }
+  if (user.role === 'employee') {
+    if (/^\/api\/documents\/\d+\/download$/.test(pathname)) return method === 'GET' || method === 'HEAD';
+    if (/^\/api\/health-records\/\d+\/file$/.test(pathname)) return method === 'GET' || method === 'HEAD';
+  }
+  return false;
+}
+
 function nurseMayUse(method, pathname) {
   if (pathname === '/api/login' || pathname === '/api/logout' || pathname === '/api/me') return true;
   if (pathname === '/api/setup-status' && method === 'GET') return true;
@@ -3980,6 +4412,10 @@ function nurseMayUse(method, pathname) {
 
 async function handleApi(req, res, url) {
   const sessionOwner = sessionUser(req);
+  if (sessionOwner && ['head', 'employee', 'supervisor', 'gm'].includes(sessionOwner.role)
+      && !limitedRoleMayUse(sessionOwner, req.method, url.pathname)) {
+    return sendJson(res, 403, { error: 'Your account role does not allow that action.' });
+  }
   if (sessionOwner && sessionOwner.role === 'nurse' && !nurseMayUse(req.method, url.pathname)) {
     return sendJson(res, 403, { error: 'Nurse accounts can only view and manage health records.' });
   }
@@ -4264,7 +4700,15 @@ const server = http.createServer((req, res) => {
     '/reports', '/reminders', '/departments', '/payroll', '/leave', '/bank-ssnit', '/users', '/admin',
   ]);
   if (appPages.has(pathname)) {
-    if (!hasAdminAccount() || !sessionUser(req)) return redirect(res, '/');
+    const user = sessionUser(req);
+    if (!hasAdminAccount() || !user) return redirect(res, '/');
+    const allowedPages = {
+      head: ['/app', '/employees', '/leave', '/training'],
+      employee: ['/app', '/employees', '/leave'],
+      supervisor: ['/app', '/employees', '/leave'],
+      gm: ['/app', '/leave'],
+    }[user.role];
+    if (allowedPages && !allowedPages.includes(pathname)) return redirect(res, '/app');
     return serveFile(res, path.join(PUBLIC_DIR, 'app.html'));
   }
 

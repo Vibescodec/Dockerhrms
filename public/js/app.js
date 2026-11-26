@@ -274,6 +274,9 @@ function roleLabel(role) {
   if (role === 'admin') return 'Administrator';
   if (role === 'hr') return 'HR user';
   if (role === 'head') return 'Department head';
+  if (role === 'employee') return 'Employee';
+  if (role === 'supervisor') return 'Supervisor';
+  if (role === 'gm') return 'General manager';
   if (role === 'nurse') return 'Nurse';
   if (role === 'viewer') return 'Viewer';
   return role;
@@ -288,7 +291,19 @@ function isHr() {
 }
 
 function isHead() {
-  return !!state.user && state.user.role === 'head' && Boolean(state.user.employeeId);
+  return !!state.user && state.user.role === 'head';
+}
+
+function isEmployee() {
+  return !!state.user && state.user.role === 'employee';
+}
+
+function isSupervisor() {
+  return !!state.user && state.user.role === 'supervisor';
+}
+
+function isGm() {
+  return !!state.user && state.user.role === 'gm';
 }
 
 function isNurse() {
@@ -297,6 +312,24 @@ function isNurse() {
 
 function canEdit() {
   return !!state.user && (state.user.role === 'admin' || state.user.role === 'hr');
+}
+
+function canApplyLeave() {
+  return !!state.user && ['admin', 'hr', 'head', 'employee', 'supervisor'].includes(state.user.role);
+}
+
+function isDepartmentViewer() {
+  return isHead() || isSupervisor();
+}
+
+function rolePages(role) {
+  return {
+    nurse: ['/app', '/health-records'],
+    head: ['/app', '/employees', '/leave', '/training'],
+    employee: ['/app', '/employees', '/leave'],
+    supervisor: ['/app', '/employees', '/leave'],
+    gm: ['/app', '/leave'],
+  }[role] || null;
 }
 
 function canManageHealth() {
@@ -419,26 +452,34 @@ function renderUser(user) {
 
 function applyRoleGating() {
   const editable = canEdit();
-  for (const node of document.querySelectorAll('[data-editor-only]')) {
-    node.hidden = !editable;
-  }
   const healthEditor = canManageHealth();
-  for (const node of document.querySelectorAll('[data-health-only]')) {
-    node.hidden = !healthEditor;
+  const departmentViewer = isDepartmentViewer();
+  const organisationHidden = ['head', 'employee', 'supervisor', 'gm'].includes(state.user?.role);
+  const payrollVisible = ['admin', 'hr', 'viewer'].includes(state.user?.role);
+  for (const node of document.querySelectorAll(
+    '[data-editor-only], [data-health-only], [data-non-nurse], [data-hod-hidden], [data-org-hidden], [data-no-payroll]'
+  )) {
+    node.hidden = (node.hasAttribute('data-editor-only') && !editable)
+      || (node.hasAttribute('data-health-only') && !healthEditor)
+      || (node.hasAttribute('data-non-nurse') && isNurse())
+      || (node.hasAttribute('data-hod-hidden') && departmentViewer)
+      || (node.hasAttribute('data-org-hidden') && organisationHidden)
+      || (node.hasAttribute('data-no-payroll') && !payrollVisible);
   }
-  for (const node of document.querySelectorAll('[data-non-nurse]')) {
-    node.hidden = isNurse();
-  }
-  document.querySelector('.dashboard-summary-grid').classList.toggle('single-summary', isNurse());
-  if (isNurse()) {
-    for (const link of document.querySelectorAll('.side-link')) {
-      const href = link.getAttribute('href');
-      link.hidden = href !== '/app' && href !== '/health-records';
-    }
-  } else {
-    for (const link of document.querySelectorAll('.side-link')) {
-      if (link.id === 'users-nav-link' || link.id === 'admin-nav-link') continue;
-      link.hidden = false;
+  $('dashboard-stats').hidden = isGm();
+  $('summary-workforce-card').hidden = isEmployee() || isGm();
+  $('new-leave-btn').hidden = !canApplyLeave();
+  document.querySelector('.dashboard-summary-grid').classList.toggle(
+    'single-summary', isNurse() || isEmployee() || isGm()
+  );
+  document.querySelector('.dashboard-summary-grid').classList.toggle('head-summary', departmentViewer);
+
+  const allowed = rolePages(state.user?.role);
+  for (const link of document.querySelectorAll('.side-link')) {
+    if (link.id === 'users-nav-link' || link.id === 'admin-nav-link') {
+      link.hidden = state.user?.role !== 'admin';
+    } else {
+      link.hidden = allowed ? !allowed.includes(link.getAttribute('href')) : false;
     }
   }
 }
@@ -472,7 +513,8 @@ async function renderRoute() {
     history.replaceState({}, '', '/app');
     path = '/app';
   }
-  if (isNurse() && path !== '/app' && path !== '/health-records') {
+  const allowedPages = rolePages(state.user?.role);
+  if (allowedPages && !allowedPages.includes(path)) {
     history.replaceState({}, '', '/app');
     path = '/app';
   }
@@ -493,7 +535,7 @@ async function renderRoute() {
 
   try {
     if (path === '/app') {
-      await Promise.all([loadDashboard(), ensureDepartments()]);
+      await Promise.all([loadDashboard(), isGm() ? Promise.resolve() : ensureDepartments()]);
     } else if (path === '/employees') {
       await loadEmployeesView();
     } else if (path === '/health-records') {
@@ -699,18 +741,29 @@ function renderAttention(attention = {}) {
 }
 
 function renderStats(stats) {
+  $('stat-total-label').textContent = isEmployee() ? 'My record' : 'Total staff';
+  $('stat-active-label').textContent = isEmployee() ? 'Employment status' : 'Active staff';
+  $('stat-training-label').textContent = isEmployee() ? 'My training' : 'Training records';
+  $('stat-longest-label').textContent = isEmployee() ? 'My service' : 'Longest service';
+
   $('stat-total').textContent = numberFormat.format(stats.total);
-  $('stat-total-sub').textContent = `${stats.inactive} inactive · ${stats.departments} configured departments`;
-  $('stat-active').textContent = numberFormat.format(stats.active);
-  $('stat-active-sub').textContent = stats.total
-    ? `${Math.round((stats.active / stats.total) * 100)}% of all staff`
-    : 'No staff yet';
+  $('stat-total-sub').textContent = isDepartmentViewer()
+    ? `${stats.inactive} inactive · ${stats.departments} ${plural(stats.departments, 'department', 'departments')} in your scope`
+    : `${stats.inactive} inactive · ${stats.departments} configured departments`;
+  $('stat-active').textContent = isEmployee() ? (stats.active ? 'Active' : 'Inactive') : numberFormat.format(stats.active);
+  $('stat-active-sub').textContent = isEmployee()
+    ? 'Linked employee record'
+    : stats.total
+      ? `${Math.round((stats.active / stats.total) * 100)}% of ${isDepartmentViewer() ? 'department' : 'all'} staff`
+      : 'No staff yet';
   $('stat-training').textContent = numberFormat.format(stats.training);
-  $('stat-training-sub').textContent = 'recorded org-wide';
+  $('stat-training-sub').textContent = isEmployee()
+    ? 'records on your profile'
+    : isDepartmentViewer() ? 'recorded in your department' : 'recorded org-wide';
   $('stat-longest').textContent = stats.longest ? `${stats.longest.years.toFixed(1)} yrs` : '—';
   $('stat-longest-sub').textContent = stats.longest
     ? `${stats.longest.name} · ${stats.longest.staffId}`
-    : 'No active staff yet';
+    : isEmployee() ? 'No active service record' : 'No active staff yet';
 }
 
 function statusPill(status) {
@@ -744,10 +797,12 @@ function renderDashboardSummary(summary = {}) {
 
   const expatriates = Number(workforce.expatriates) || 0;
   const contracts = Number(workforce.contractsEndingSoon) || 0;
-  $('summary-workforce-foot').textContent = expatriates || contracts
-    ? `${expatriates} active ${plural(expatriates, 'expatriate', 'expatriates')} · ` +
-      `${contracts} ${plural(contracts, 'contract', 'contracts')} ending in 60 days`
-    : 'No active expatriates or contracts ending in 60 days.';
+  $('summary-workforce-foot').textContent = isDepartmentViewer()
+    ? `${active} active ${plural(active, 'employee', 'employees')} in ${plural(departments.length, 'department', 'departments')} in your scope.`
+    : expatriates || contracts
+      ? `${expatriates} active ${plural(expatriates, 'expatriate', 'expatriates')} · ` +
+        `${contracts} ${plural(contracts, 'contract', 'contracts')} ending in 60 days`
+      : 'No active expatriates or contracts ending in 60 days.';
 
   const leave = summary.leave;
   if (leave) {
@@ -758,12 +813,19 @@ function renderDashboardSummary(summary = {}) {
     $('summary-leave-pending').textContent = numberFormat.format(pending);
     $('summary-leave-head').textContent = numberFormat.format(Number(leave.pendingHead) || 0);
     $('summary-leave-hr').textContent = numberFormat.format(Number(leave.pendingHr) || 0);
+    $('summary-leave-gm').textContent = numberFormat.format(Number(leave.pendingGm) || 0);
     $('summary-leave-approved').textContent = numberFormat.format(approved);
     $('summary-leave-content').hidden = pending === 0 && approved === 0 && onLeave === 0;
     $('summary-leave-empty').hidden = pending !== 0 || approved !== 0 || onLeave !== 0;
-    $('summary-leave-today').textContent = onLeave
-      ? `${onLeave} ${plural(onLeave, 'staff member is', 'staff members are')} on approved leave today.`
-      : 'No staff are on approved leave today.';
+    $('summary-leave-today').textContent = isEmployee()
+      ? onLeave ? 'You are on approved leave today.' : 'You are not on approved leave today.'
+      : isGm()
+        ? onLeave
+          ? `${onLeave} ${plural(onLeave, 'HOD is', 'HODs are')} on approved leave today.`
+          : 'No HODs are on approved leave today.'
+        : onLeave
+          ? `${onLeave} ${plural(onLeave, 'staff member is', 'staff members are')} on approved leave today.`
+          : 'No staff are on approved leave today.';
   }
 
   const payroll = summary.payroll;
@@ -783,7 +845,7 @@ function renderDashboardSummary(summary = {}) {
     $('summary-payroll-note').textContent = missingSalary
       ? `${statusNote} ${missingSalary} active ${plural(missingSalary, 'employee has', 'employees have')} no basic salary recorded.`
       : statusNote;
-  } else if (!isNurse()) {
+  } else if (['admin', 'hr', 'viewer'].includes(state.user?.role)) {
     $('summary-payroll-period').textContent = 'No payroll yet';
     $('summary-payroll-content').hidden = true;
     $('summary-payroll-empty').hidden = false;
@@ -796,7 +858,15 @@ async function loadDashboard() {
   const data = await api('/api/dashboard');
   if (seq !== state.seq) return;
   renderGreeting();
-  renderAttention(data.attention);
+  if (isDepartmentViewer()) {
+    $('dash-sub').textContent = 'Your department overview.';
+  } else if (isEmployee()) {
+    $('dash-sub').textContent = 'Your employment and leave overview.';
+  } else if (isGm()) {
+    $('dash-sub').textContent = 'HOD leave awaiting final approval.';
+  } else {
+    renderAttention(data.attention);
+  }
   renderStats(data.stats);
   renderDashboardSummary(data.summary);
 }
@@ -1074,6 +1144,7 @@ for (const [id, type] of Object.entries(ADD_ROW_HANDLERS)) {
 }
 
 function showEmployeeTab(name) {
+  if (isDepartmentViewer() && !['personal', 'employment'].includes(name)) name = 'personal';
   for (const button of employeeDialog.querySelectorAll('.tab-btn')) {
     const active = button.dataset.tab === name;
     button.classList.toggle('active', active);
@@ -1177,6 +1248,7 @@ function fillEmployeeForm(profile) {
 }
 
 async function openEmployeeEditor(employeeId = null) {
+  if (!canEdit() && !employeeId) return;
   try {
     await ensureDepartments();
   } catch (err) {
@@ -1231,9 +1303,13 @@ async function openEmployeeEditor(employeeId = null) {
   $('employee-dialog-title').textContent = employeeId
     ? (canEdit() ? 'Edit employee' : 'Employee details')
     : 'Add employee';
-  $('employee-dialog-sub').textContent = profile
-    ? `${profile.fullName} · ${profile.staffId}`
-    : 'Create a full personnel record.';
+  $('employee-dialog-sub').textContent = isDepartmentViewer()
+    ? 'Read-only department staff record.'
+    : isEmployee()
+      ? 'Your linked employee record.'
+      : profile
+        ? `${profile.fullName} · ${profile.staffId}`
+        : 'Create a full personnel record.';
   employeeSubmit.textContent = employeeId ? 'Save changes' : 'Add employee';
 
   $('employee-photo-file').value = '';
@@ -3686,19 +3762,15 @@ function leaveActionButtons(request) {
     buttons.push(button);
   };
 
-  if (request.status === 'Pending head') {
-    if (isHr()) {
-      add('Recommend', 'recommend');
-      add('Decline', 'reject', true);
-    } else if (headsDepartment(request.department)) {
-      add('Recommend', 'recommend');
-      add('Decline', 'reject', true);
-    }
-  } else if (request.status === 'Pending HR') {
-    if (isHr()) {
-      add('Approve', 'confirm');
-      add('Decline', 'reject', true);
-    }
+  if (request.status === 'Pending head' && headsDepartment(request.department)) {
+    add('Recommend', 'recommend');
+    add('Decline', 'reject', true);
+  } else if (request.status === 'Pending HR' && isHr()) {
+    add(request.gmRequired ? 'Preapprove' : 'Approve', 'confirm');
+    add('Decline', 'reject', true);
+  } else if (request.status === 'Pending GM' && isGm()) {
+    add('Final approve', 'confirm');
+    add('Decline', 'reject', true);
   }
   return buttons;
 }
@@ -3710,17 +3782,22 @@ function renderLeave() {
 
   const pendingHead = requests.filter((item) => item.status === 'Pending head').length;
   const pendingHr = requests.filter((item) => item.status === 'Pending HR').length;
+  const pendingGm = requests.filter((item) => item.status === 'Pending GM').length;
   const approved = requests.filter((item) => item.status === 'Approved').length;
   $('leave-sub').textContent = requests.length
     ? `${requests.length} ${plural(requests.length, 'request', 'requests')} in ${state.leaveYear} · ` +
-      `${pendingHead} awaiting head · ${pendingHr} awaiting HR · ${approved} approved`
+      `${pendingHead} awaiting head · ${pendingHr} awaiting HR · ${pendingGm} awaiting GM · ${approved} approved`
     : `No leave requests in ${state.leaveYear}.`;
 
   $('leave-table').hidden = requests.length === 0;
   $('leave-empty').hidden = requests.length > 0;
-  $('leave-empty-text').textContent = isHead()
-    ? `No requests from the departments you head in ${state.leaveYear}.`
-    : `No leave requests in ${state.leaveYear}.`;
+  $('leave-empty-text').textContent = isGm()
+    ? `No HOD leave requests in ${state.leaveYear}.`
+    : isEmployee()
+      ? `You have no leave requests in ${state.leaveYear}.`
+      : isDepartmentViewer()
+        ? `No requests from your department in ${state.leaveYear}.`
+        : `No leave requests in ${state.leaveYear}.`;
 
   for (const request of requests) {
     const row = document.createElement('tr');
@@ -3729,6 +3806,9 @@ function renderLeave() {
     const stack = el('div', 'cell-stack');
     stack.append(el('span', 'name', request.fullName));
     stack.append(el('span', 'cell-sub', request.staffId));
+    if (request.requestedByName) {
+      stack.append(el('span', 'cell-sub', `Applied by ${request.requestedByName}`));
+    }
     nameCell.append(stack);
     row.append(nameCell);
 
@@ -3743,8 +3823,15 @@ function renderLeave() {
     const headCell = el('td');
     const headStack = el('div', 'cell-stack');
     headStack.append(el('span', null, request.headName || 'No head assigned'));
+    if (request.gmRequired) {
+      headStack.append(el('span', 'cell-sub', 'HOD stage skipped'));
+    } else if (request.requestedByRole === 'head') {
+      headStack.append(el('span', 'cell-sub', 'Applied by HOD · head stage skipped'));
+    }
     if (request.headByName) {
-      headStack.append(el('span', 'cell-sub', `Recommended by ${request.headByName}`));
+      const rejectedByHead = request.status === 'Rejected' && !request.hrDecidedAt && !request.gmDecidedAt;
+      headStack.append(el('span', 'cell-sub',
+        `${rejectedByHead ? 'Declined' : 'Recommended'} by ${request.headByName} · ${formatStamp(request.headDecidedAt)}`));
     }
     if (request.headNote) headStack.append(el('span', 'leave-note', request.headNote));
     headCell.append(headStack);
@@ -3753,10 +3840,24 @@ function renderLeave() {
     const statusCell = el('td');
     const statusStack = el('div', 'cell-stack');
     statusStack.append(leaveStatusPill(request.status));
-    if (request.decidedAt) {
-      statusStack.append(el('span', 'cell-sub', `${request.status} by ${request.decidedByName || 'HR'}`));
+    if (request.hrDecidedAt) {
+      const preapproved = request.gmRequired && (request.gmDecidedAt || request.status === 'Pending GM');
+      const label = preapproved ? 'Preapproved' : request.status === 'Rejected' ? 'Declined' : 'Approved';
+      statusStack.append(el('span', 'cell-sub',
+        `${label} by ${request.hrByName || 'HR'} · ${formatStamp(request.hrDecidedAt)}`));
+      if (request.hrNote) statusStack.append(el('span', 'leave-note', request.hrNote));
     }
-    if (request.decisionNote) statusStack.append(el('span', 'leave-note', request.decisionNote));
+    if (request.gmDecidedAt) {
+      statusStack.append(el('span', 'cell-sub',
+        `${request.status === 'Rejected' ? 'Declined' : 'Final approval'} by ${request.gmByName || 'General manager'} · ` +
+        formatStamp(request.gmDecidedAt)));
+      if (request.gmNote) statusStack.append(el('span', 'leave-note', request.gmNote));
+    }
+    if (request.decidedAt && !request.headDecidedAt && !request.hrDecidedAt && !request.gmDecidedAt) {
+      statusStack.append(el('span', 'cell-sub',
+        `${request.status} by ${request.decidedByName || 'HR'} · ${formatStamp(request.decidedAt)}`));
+      if (request.decisionNote) statusStack.append(el('span', 'leave-note', request.decisionNote));
+    }
     statusCell.append(statusStack);
     row.append(statusCell);
 
@@ -3773,7 +3874,7 @@ function renderLeave() {
 
 async function loadLeaveView() {
   const seq = ++state.leaveSeq;
-  await Promise.all([ensureDepartments(), ensureEmployees()]);
+  if (!isGm()) await Promise.all([ensureDepartments(), ensureEmployees()]);
   const data = await api(`/api/leave?year=${encodeURIComponent(state.leaveYear)}`);
   if (seq !== state.leaveSeq) return;
   state.leaveYear = String(data.year);
@@ -3801,19 +3902,42 @@ function fillLeaveEmployeeSelect(selectedId) {
   for (const employee of employees) {
     select.append(option(String(employee.id), `${employee.fullName} (${employee.staffId}) · ${employee.department}`));
   }
-  if (selectedId) select.value = String(selectedId);
+  const preferredId = selectedId || (isEmployee() ? state.user.employeeId : null);
+  if (preferredId) select.value = String(preferredId);
+  select.disabled = isEmployee();
+}
+
+function leaveRouteCopy(employeeId) {
+  const employee = (state.employees || []).find((row) => Number(row.id) === Number(employeeId));
+  if (!employee) return 'The department head recommends first, then HR approves.';
+  const department = state.departments.find((row) => row.name.toLowerCase() === String(employee.department).toLowerCase());
+  const targetIsHead = Boolean(
+    (department && Number(department.headEmployeeId) === Number(employee.id))
+    || (isHead() && Number(employee.id) === Number(state.user.employeeId))
+  );
+  if (targetIsHead) return 'HOD leave goes to HR for preapproval, then the general manager for final approval.';
+  if (isHead()) return 'This request goes directly to HR because you are applying for an employee in your department.';
+  if (!department || !department.headEmployeeId) {
+    return 'No department head is assigned. This request will wait for a HOD before HR can act.';
+  }
+  return 'The department head recommends first, then HR approves.';
 }
 
 function openLeaveDialog() {
+  if (!canApplyLeave()) return;
   leaveForm.reset();
   hideFormError(leaveError);
   clearInvalid(leaveForm);
   fillLeaveEmployeeSelect();
   leaveForm.elements.leaveType.value = 'Annual';
+  $('leave-dialog-sub').textContent = leaveRouteCopy(leaveForm.elements.employeeId.value);
   $('leave-days-display').textContent = 'Pick start and end dates';
   $('leave-balance-hint').textContent = 'Weekends are skipped; Monday to Friday are counted.';
   leaveDialog.showModal();
-  setTimeout(() => leaveForm.elements.employeeId.focus(), 30);
+  setTimeout(() => {
+    const target = leaveForm.elements.employeeId.disabled ? leaveForm.elements.startOn : leaveForm.elements.employeeId;
+    target.focus();
+  }, 30);
 }
 
 $('new-leave-btn').addEventListener('click', openLeaveDialog);
@@ -3826,6 +3950,7 @@ async function updateLeavePreview() {
   const endOn = leaveForm.elements.endOn.value;
   const employeeId = leaveForm.elements.employeeId.value;
   const leaveType = leaveForm.elements.leaveType.value;
+  $('leave-dialog-sub').textContent = leaveRouteCopy(employeeId);
 
   const days = workingDaysBetween(startOn, endOn);
   $('leave-days-display').textContent = startOn && endOn
@@ -3845,7 +3970,9 @@ async function updateLeavePreview() {
     if (seq !== leavePreviewSeq) return;
     const balance = data.balance;
     if (!balance || balance.entitlement === null) {
-      $('leave-balance-hint').textContent = `${data.employee.fullName} has no leave entitlement set. Set it on the employee record.`;
+      $('leave-balance-hint').textContent = canEdit()
+        ? `${data.employee.fullName} has no leave entitlement set. Set it on the employee record.`
+        : `${data.employee.fullName} has no leave entitlement set. Ask HR to set it on the employee record.`;
       return;
     }
     const available = Math.round((balance.remaining - balance.pending) * 10) / 10;
@@ -3914,7 +4041,9 @@ leaveForm.addEventListener('submit', async (event) => {
     state.leaveYear = String(data.request.startOn).slice(0, 4);
     toast(data.request.status === 'Pending head'
       ? `Request sent to the department head for ${data.request.fullName}.`
-      : `Request sent to HR for ${data.request.fullName}.`);
+      : data.request.gmRequired
+        ? `Request sent to HR for preapproval, then the general manager, for ${data.request.fullName}.`
+        : `Request sent to HR for ${data.request.fullName}.`);
     await loadLeaveView();
   } catch (err) {
     if (err.status === 401) return;
@@ -3942,9 +4071,27 @@ const LEAVE_DECISION_COPY = {
   },
 };
 
+function leaveDecisionCopy(mode, request) {
+  if (mode === 'confirm' && request.status === 'Pending HR' && request.gmRequired) {
+    return {
+      title: 'Preapprove HOD leave',
+      submit: 'Preapprove',
+      help: 'HR preapproval sends this request to the general manager for final approval.',
+    };
+  }
+  if (mode === 'confirm' && request.status === 'Pending GM') {
+    return {
+      title: 'Final HOD leave approval',
+      submit: 'Final approve',
+      help: 'This is the final decision and adds the days to the leave balance.',
+    };
+  }
+  return LEAVE_DECISION_COPY[mode];
+}
+
 function openLeaveDecision(mode, request) {
-  const copy = LEAVE_DECISION_COPY[mode];
-  state.leaveDecision = { mode, id: request.id };
+  const copy = leaveDecisionCopy(mode, request);
+  state.leaveDecision = { mode, id: request.id, copy };
   leaveDecisionForm.reset();
   hideFormError(leaveDecisionError);
   clearInvalid(leaveDecisionForm);
@@ -3968,17 +4115,19 @@ leaveDecisionForm.addEventListener('submit', async (event) => {
   hideFormError(leaveDecisionError);
   const decision = state.leaveDecision;
   if (!decision) return;
-  const copy = LEAVE_DECISION_COPY[decision.mode];
+  const copy = decision.copy;
 
   setBusy(leaveDecisionSubmit, true, copy.submit, 'Saving…');
   try {
-    await api(`/api/leave/${decision.id}/${decision.mode}`, jsonRequest('POST', {
+    const data = await api(`/api/leave/${decision.id}/${decision.mode}`, jsonRequest('POST', {
       note: leaveDecisionForm.elements.note.value.trim(),
     }));
     leaveDecisionDialog.close();
     const messages = {
       recommend: 'Recommended. Sent to HR for approval.',
-      confirm: 'Leave approved.',
+      confirm: data.request.status === 'Pending GM'
+        ? 'HR preapproved. Sent to the general manager for final approval.'
+        : 'Leave approved.',
       reject: 'Leave request declined.',
     };
     toast(messages[decision.mode]);
@@ -4122,6 +4271,9 @@ function renderUsers() {
     if (user.employeeName) {
       stack.append(el('span', 'cell-sub', `Linked to ${user.employeeName}${user.employeeDepartment ? ` · ${user.employeeDepartment}` : ''}`));
     }
+    if (user.departmentName) {
+      stack.append(el('span', 'cell-sub', `Assigned to ${user.departmentName}`));
+    }
     nameCell.append(stack);
     row.append(nameCell);
 
@@ -4174,16 +4326,28 @@ function fillUserEmployeeSelect(selectedId) {
   if (selectedId) select.value = String(selectedId);
 }
 
+function fillUserDepartmentSelect(selectedId) {
+  const select = userForm.elements.departmentId;
+  select.replaceChildren();
+  select.append(option('', 'Choose a department'));
+  const departments = [...selectableDepartments()]
+    .sort((a, b) => a.name.localeCompare(b.name));
+  for (const department of departments) {
+    select.append(option(String(department.id), department.name));
+  }
+  if (selectedId) select.value = String(selectedId);
+}
+
 async function openUserDialog(user = null) {
   state.editingUserId = user ? user.id : null;
   userForm.reset();
   hideFormError(userError);
   clearInvalid(userForm);
   try {
-    await ensureEmployees();
+    await Promise.all([ensureEmployees(), ensureDepartments()]);
   } catch (err) {
     if (err.status === 401) return;
-    toast('Could not load employees. Check the connection.');
+    toast('Could not load account options. Check the connection.');
     return;
   }
 
@@ -4200,6 +4364,7 @@ async function openUserDialog(user = null) {
   $('user-username-hint').hidden = editing;
   userForm.elements.role.value = user ? user.role : 'hr';
   fillUserEmployeeSelect(user ? user.employeeId : '');
+  fillUserDepartmentSelect(user ? user.departmentId : '');
   syncUserEmployeeHint();
 
   $('user-password-field').hidden = editing;
@@ -4217,14 +4382,19 @@ async function openUserDialog(user = null) {
 $('add-user-btn').addEventListener('click', () => openUserDialog());
 
 function syncUserEmployeeHint() {
-  const head = userForm.elements.role.value === 'head';
-  $('user-employee-hint').textContent = head
-    ? 'A department head account must be linked to an employee.'
+  const role = userForm.elements.role.value;
+  const requiresEmployee = role === 'head' || role === 'employee';
+  $('user-employee-hint').textContent = requiresEmployee
+    ? `A ${role === 'head' ? 'department head' : 'employee'} account must be linked to an employee.`
     : 'Optional — links this account to a staff record.';
+  userForm.elements.employeeId.required = requiresEmployee;
+  $('user-department-field').hidden = role !== 'supervisor';
+  userForm.elements.departmentId.required = role === 'supervisor';
 }
 
 userForm.elements.role.addEventListener('change', () => {
   markInvalid(userForm.elements.employeeId, false);
+  markInvalid(userForm.elements.departmentId, false);
   syncUserEmployeeHint();
 });
 
@@ -4244,6 +4414,7 @@ userForm.addEventListener('submit', async (event) => {
     role: String(values.role || ''),
     active: userForm.elements.active.checked,
     employeeId: values.employeeId ? Number(values.employeeId) : null,
+    departmentId: values.role === 'supervisor' && values.departmentId ? Number(values.departmentId) : null,
   };
   if (!editingId) {
     payload.username = String(values.username || '').trim().toLowerCase();
@@ -4268,10 +4439,16 @@ userForm.addEventListener('submit', async (event) => {
     userForm.elements.password.focus();
     return;
   }
-  if (payload.role === 'head' && !payload.employeeId) {
+  if (['head', 'employee'].includes(payload.role) && !payload.employeeId) {
     markInvalid(userForm.elements.employeeId, true);
-    showFormError(userError, 'Link this department head account to an employee.');
+    showFormError(userError, 'Link this account to an employee.');
     userForm.elements.employeeId.focus();
+    return;
+  }
+  if (payload.role === 'supervisor' && !payload.departmentId) {
+    markInvalid(userForm.elements.departmentId, true);
+    showFormError(userError, 'Assign this supervisor to a department.');
+    userForm.elements.departmentId.focus();
     return;
   }
 
@@ -4283,6 +4460,7 @@ userForm.addEventListener('submit', async (event) => {
         role: payload.role,
         active: payload.active,
         employeeId: payload.employeeId,
+        departmentId: payload.departmentId,
       }));
       state.users = state.users.map((row) => (row.id === data.user.id ? data.user : row));
       userDialog.close();
@@ -4917,13 +5095,15 @@ $('logout-btn').addEventListener('click', async () => {
 
 (async function init() {
   try {
-    const [me, branding, taxData] = await Promise.all([
+    const [me, branding] = await Promise.all([
       api('/api/me'),
       api('/api/branding').catch(() => ({})),
-      api('/api/payroll/taxes'),
     ]);
     state.user = me.user;
-    state.payrollTaxes = taxData.taxes;
+    if (!['nurse', 'head', 'employee', 'supervisor', 'gm'].includes(me.user.role)) {
+      const taxData = await api('/api/payroll/taxes');
+      state.payrollTaxes = taxData.taxes;
+    }
     renderUser(me.user);
     renderCompanyName(branding.companyName);
     setTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light', false);

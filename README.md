@@ -42,6 +42,23 @@ The server binds to `127.0.0.1` by default. To allow another device on the same 
 
 Only expose HRMS on a trusted network. Use a reverse proxy with HTTPS for remote access.
 
+### Secure remote access with Cloudflare Tunnel
+
+For temporary access from another network without opening an inbound firewall port:
+
+1. Install the Cloudflare Tunnel client from PowerShell or Command Prompt:
+
+   ```powershell
+   winget install --exact --id Cloudflare.cloudflared
+   ```
+
+2. Close and reopen the terminal so the updated `PATH` is available. Close any HRMS window started with `Start HRMS.bat` if you want tunnel-only access.
+3. Run `Start secure tunnel.bat`. It starts HRMS on `127.0.0.1` when needed and refuses to expose the app until first-run administrator setup is complete locally.
+4. Wait for cloudflared to print an HTTPS address, open it, and sign in normally.
+5. Keep the tunnel window open. Press `Ctrl+C` to stop the tunnel and any local HRMS process started by the script.
+
+Cloudflare encrypts the connection, and HRMS authentication still applies. The quick-tunnel address is public to anyone who has it, so treat it like a password and share it only with trusted users. The address changes between runs, and quick tunnels have no uptime guarantee; use a named Cloudflare tunnel with Access controls and a custom domain for permanent production access.
+
 ## Roles
 
 | Role | Access |
@@ -101,6 +118,7 @@ public/
   js/app.js            Browser application logic
   js/login.js          Sign-in and setup logic
 tools/reset-data.js    Interactive data-reset utility
+tools/secure-tunnel.js Cloudflare Tunnel process manager
 *.bat                  Windows startup and maintenance helpers
 ```
 

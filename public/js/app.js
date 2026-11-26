@@ -24,6 +24,20 @@ const BANKS = [
   'Standard Chartered', 'Stanbic Bank', 'Zenith Bank',
 ];
 
+const DEFAULT_PAYROLL_TAXES = {
+  ssnitEmployeeRate: 5.5,
+  ssnitEmployerRate: 13,
+  payeBands: [
+    { width: 490, rate: 0 },
+    { width: 110, rate: 5 },
+    { width: 130, rate: 10 },
+    { width: 3166.67, rate: 17.5 },
+    { width: 16000, rate: 25 },
+    { width: 30520, rate: 30 },
+    { width: null, rate: 35 },
+  ],
+};
+
 const ALLOWED_DOC_TYPES = new Set([
   'image/png', 'image/jpeg', 'image/webp', 'image/gif',
   'application/pdf', 'application/msword',
@@ -61,6 +75,7 @@ const state = {
   unitDepartmentId: null,
   expandedDepartment: null,
   payrollRuns: [],
+  payrollTaxes: DEFAULT_PAYROLL_TAXES,
   payrollRun: null,
   payrollRunId: null,
   editingPayslipId: null,
@@ -70,7 +85,6 @@ const state = {
   confirmBusyLabel: null,
   pendingPhoto: null,
   removePhoto: false,
-  highlightId: null,
   seq: 0,
   empSeq: 0,
   trainingSeq: 0,
@@ -88,13 +102,6 @@ const state = {
 
 let departmentsLoaded = false;
 
-const searchInput = $('staff-search');
-const staffBody = $('staff-body');
-const staffTable = $('staff-table');
-const staffEmpty = $('staff-empty');
-const emptyMessage = $('empty-message');
-const emptyAction = $('empty-action');
-const staffCount = $('staff-count');
 const toastEl = $('toast');
 
 const employeeDialog = $('employee-dialog');
@@ -152,6 +159,11 @@ const companyDialog = $('company-dialog');
 const companyForm = $('company-form');
 const companyError = $('company-error');
 const companySubmit = $('company-submit');
+
+const payrollTaxesForm = $('payroll-taxes-form');
+const payrollTaxesError = $('payroll-taxes-error');
+const payrollTaxesStatus = $('payroll-taxes-status');
+const payrollTaxesSubmit = $('payroll-taxes-submit');
 
 const passwordDialog = $('password-dialog');
 const passwordForm = $('password-form');
@@ -399,7 +411,6 @@ function renderUser(user) {
   userBtn.setAttribute('aria-label', `Account menu for ${user.displayName || user.username}`);
   $('menu-name').textContent = user.displayName || user.username;
   $('menu-role').textContent = roleLabel(user.role);
-  $('replace-logo-btn').hidden = user.role !== 'admin';
   $('users-nav-link').hidden = user.role !== 'admin';
   $('admin-nav-link').hidden = user.role !== 'admin';
   $('brand-company-btn').disabled = user.role !== 'admin';
@@ -415,6 +426,10 @@ function applyRoleGating() {
   for (const node of document.querySelectorAll('[data-health-only]')) {
     node.hidden = !healthEditor;
   }
+  for (const node of document.querySelectorAll('[data-non-nurse]')) {
+    node.hidden = isNurse();
+  }
+  document.querySelector('.dashboard-summary-grid').classList.toggle('single-summary', isNurse());
   if (isNurse()) {
     for (const link of document.querySelectorAll('.side-link')) {
       const href = link.getAttribute('href');
@@ -478,7 +493,7 @@ async function renderRoute() {
 
   try {
     if (path === '/app') {
-      await Promise.all([loadDashboard(searchInput.value.trim()), ensureDepartments()]);
+      await Promise.all([loadDashboard(), ensureDepartments()]);
     } else if (path === '/employees') {
       await loadEmployeesView();
     } else if (path === '/health-records') {
@@ -665,7 +680,11 @@ function renderAttention(attention = {}) {
   setAttention(
     'permits',
     permits,
-    permits ? 'Expiring or expired documents' : 'All permits in order',
+    permits
+      ? 'Expiring or expired documents'
+      : attention.expatriates
+        ? 'All permits in order'
+        : 'No expatriates recorded',
   );
   setAttention(
     'tasks',
@@ -681,7 +700,7 @@ function renderAttention(attention = {}) {
 
 function renderStats(stats) {
   $('stat-total').textContent = numberFormat.format(stats.total);
-  $('stat-total-sub').textContent = `${stats.inactive} inactive · ${stats.departments} departments`;
+  $('stat-total-sub').textContent = `${stats.inactive} inactive · ${stats.departments} configured departments`;
   $('stat-active').textContent = numberFormat.format(stats.active);
   $('stat-active-sub').textContent = stats.total
     ? `${Math.round((stats.active / stats.total) * 100)}% of all staff`
@@ -698,77 +717,93 @@ function statusPill(status) {
   return el('span', `pill ${status === 'Active' ? 'pill-active' : 'pill-inactive'}`, status);
 }
 
-function employeeRow(employee) {
-  const row = document.createElement('tr');
-  row.dataset.id = String(employee.id);
+function renderDashboardSummary(summary = {}) {
+  const workforce = summary.workforce || {};
+  const active = Number(workforce.active) || 0;
+  const departments = Array.isArray(workforce.departments) ? workforce.departments : [];
+  const workforceList = $('summary-workforce-list');
+  workforceList.replaceChildren();
+  for (const department of departments) {
+    const count = Number(department.count) || 0;
+    const row = el('div', 'department-row');
+    const line = el('div', 'department-line');
+    line.append(
+      el('span', 'department-name', department.department || 'Unassigned'),
+      el('strong', 'department-count', numberFormat.format(count)),
+    );
+    const track = el('div', 'department-track');
+    track.setAttribute('aria-hidden', 'true');
+    const fill = el('span', 'department-fill');
+    fill.style.width = `${active ? (count / active) * 100 : 0}%`;
+    track.append(fill);
+    row.append(line, track);
+    workforceList.append(row);
+  }
+  workforceList.hidden = active === 0;
+  $('summary-workforce-empty').hidden = active !== 0;
 
-  row.append(el('td', 'staff-id', employee.staffId));
-  row.append(el('td', 'name', employee.fullName));
-  row.append(el('td', 'department', employee.department));
-  row.append(el('td', 'position', employee.position));
+  const expatriates = Number(workforce.expatriates) || 0;
+  const contracts = Number(workforce.contractsEndingSoon) || 0;
+  $('summary-workforce-foot').textContent = expatriates || contracts
+    ? `${expatriates} active ${plural(expatriates, 'expatriate', 'expatriates')} · ` +
+      `${contracts} ${plural(contracts, 'contract', 'contracts')} ending in 60 days`
+    : 'No active expatriates or contracts ending in 60 days.';
 
-  const statusCell = el('td');
-  statusCell.append(statusPill(employee.status));
-  row.append(statusCell);
-
-  row.append(el('td', 'joined', formatDate(employee.joinedOn)));
-  return row;
-}
-
-function renderTable(rows, query) {
-  staffBody.replaceChildren();
-
-  if (!rows.length) {
-    staffTable.hidden = true;
-    staffEmpty.hidden = false;
-    staffCount.textContent = '';
-    if (query) {
-      emptyMessage.textContent = `No staff match “${query}”. Try a different name, ID or department.`;
-      emptyAction.hidden = false;
-      emptyAction.textContent = 'Clear search';
-      emptyAction.dataset.mode = 'clear';
-    } else {
-      emptyMessage.textContent = canEdit()
-        ? 'No staff records yet. Add your first employee to get started.'
-        : 'No staff records yet.';
-      emptyAction.hidden = !canEdit();
-      emptyAction.textContent = 'Add employee';
-      emptyAction.dataset.mode = 'add';
-    }
-    return;
+  const leave = summary.leave;
+  if (leave) {
+    const pending = Number(leave.pending) || 0;
+    const approved = Number(leave.approvedYear) || 0;
+    const onLeave = Number(leave.onLeaveToday) || 0;
+    $('summary-leave-year').textContent = `Pending requests · approved in ${leave.year}`;
+    $('summary-leave-pending').textContent = numberFormat.format(pending);
+    $('summary-leave-head').textContent = numberFormat.format(Number(leave.pendingHead) || 0);
+    $('summary-leave-hr').textContent = numberFormat.format(Number(leave.pendingHr) || 0);
+    $('summary-leave-approved').textContent = numberFormat.format(approved);
+    $('summary-leave-content').hidden = pending === 0 && approved === 0 && onLeave === 0;
+    $('summary-leave-empty').hidden = pending !== 0 || approved !== 0 || onLeave !== 0;
+    $('summary-leave-today').textContent = onLeave
+      ? `${onLeave} ${plural(onLeave, 'staff member is', 'staff members are')} on approved leave today.`
+      : 'No staff are on approved leave today.';
   }
 
-  staffTable.hidden = false;
-  staffEmpty.hidden = true;
-  for (const employee of rows) staffBody.appendChild(employeeRow(employee));
-  staffCount.textContent = query
-    ? `${rows.length} ${plural(rows.length, 'match', 'matches')} for “${query}”`
-    : `${rows.length} staff`;
-
-  if (state.highlightId !== null) {
-    const row = staffBody.querySelector(`tr[data-id="${state.highlightId}"]`);
-    if (row) {
-      row.classList.add('row-new');
-      row.scrollIntoView({ block: 'nearest' });
-    }
-    state.highlightId = null;
+  const payroll = summary.payroll;
+  if (payroll) {
+    $('summary-payroll-period').textContent = payroll.label || payroll.period;
+    $('summary-payroll-status').replaceChildren(payrollStatusPill(payroll.status));
+    $('summary-payroll-net').textContent = money(payroll.totals.net);
+    $('summary-payroll-staff').textContent = numberFormat.format(Number(payroll.totals.staffCount) || 0);
+    $('summary-payroll-gross').textContent = money(payroll.totals.gross);
+    $('summary-payroll-deductions').textContent = money(payroll.deductions);
+    $('summary-payroll-content').hidden = false;
+    $('summary-payroll-empty').hidden = true;
+    const missingSalary = Number(payroll.activeWithoutSalary) || 0;
+    const statusNote = payroll.status === 'Approved'
+      ? `Approved ${formatStamp(payroll.approvedAt)} · Figures are locked.`
+      : 'Draft figures can still change before approval.';
+    $('summary-payroll-note').textContent = missingSalary
+      ? `${statusNote} ${missingSalary} active ${plural(missingSalary, 'employee has', 'employees have')} no basic salary recorded.`
+      : statusNote;
+  } else if (!isNurse()) {
+    $('summary-payroll-period').textContent = 'No payroll yet';
+    $('summary-payroll-content').hidden = true;
+    $('summary-payroll-empty').hidden = false;
+    $('summary-payroll-note').textContent = 'Create a payroll run to see totals here.';
   }
 }
 
-async function loadDashboard(query) {
+async function loadDashboard() {
   const seq = ++state.seq;
-  const suffix = query ? `?q=${encodeURIComponent(query)}` : '';
-  const data = await api(`/api/dashboard${suffix}`);
+  const data = await api('/api/dashboard');
   if (seq !== state.seq) return;
   renderGreeting();
   renderAttention(data.attention);
   renderStats(data.stats);
-  renderTable(data.employees, query);
+  renderDashboardSummary(data.summary);
 }
 
 function refreshDashboardIfVisible() {
   if (currentPath() !== '/app' || !state.user) return;
-  loadDashboard(searchInput.value.trim()).catch(() => {
+  loadDashboard().catch(() => {
     /* the next navigation will retry */
   });
 }
@@ -783,29 +818,6 @@ for (const dialog of [employeeDialog, trainingDialog, healthDialog, reminderDial
 $('quick-training').addEventListener('click', () => openTrainingDialog());
 $('quick-health').addEventListener('click', openHealthDialog);
 $('quick-task').addEventListener('click', () => openReminderDialog());
-
-let searchTimer = null;
-
-searchInput.addEventListener('input', () => {
-  clearTimeout(searchTimer);
-  const query = searchInput.value.trim();
-  searchTimer = setTimeout(() => {
-    loadDashboard(query).catch((err) => {
-      if (err.status === 401) return;
-      toast('Could not update the staff list. Check the connection.');
-    });
-  }, 200);
-});
-
-emptyAction.addEventListener('click', () => {
-  if (emptyAction.dataset.mode === 'add') {
-    openEmployeeEditor();
-    return;
-  }
-  searchInput.value = '';
-  loadDashboard('').catch(() => toast('Could not update the staff list. Check the connection.'));
-  searchInput.focus();
-});
 
 /* ---------- Employee directory ---------- */
 
@@ -1453,9 +1465,7 @@ employeeForm.addEventListener('submit', async (event) => {
     if (currentPath() === '/employees') {
       await loadEmployeesView();
     } else if (currentPath() === '/app') {
-      state.highlightId = data.employee.id;
-      searchInput.value = '';
-      await loadDashboard('');
+      await loadDashboard();
     } else if (currentPath() === '/reports' && state.reportProfile) {
       await loadReport(state.reportProfile.id);
     }
@@ -2921,17 +2931,6 @@ function confirmRemoveDepartment(department) {
 
 /* ---------- Payroll ---------- */
 
-// Mirrors the server: GRA monthly PAYE bands and Ghana SSNIT rates.
-const PAYE_BANDS = [
-  { width: 490, rate: 0 },
-  { width: 110, rate: 0.05 },
-  { width: 130, rate: 0.1 },
-  { width: 3166.67, rate: 0.175 },
-  { width: 16000, rate: 0.25 },
-  { width: 30520, rate: 0.3 },
-  { width: Infinity, rate: 0.35 },
-];
-
 function roundMoney(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
@@ -2939,10 +2938,10 @@ function roundMoney(value) {
 function computePaye(taxable) {
   let remaining = Math.max(0, Number(taxable) || 0);
   let tax = 0;
-  for (const band of PAYE_BANDS) {
+  for (const band of state.payrollTaxes.payeBands) {
     if (remaining <= 0) break;
-    const slice = Math.min(remaining, band.width);
-    tax += slice * band.rate;
+    const slice = band.width === null ? remaining : Math.min(remaining, band.width);
+    tax += slice * band.rate / 100;
     remaining -= slice;
   }
   return roundMoney(tax);
@@ -2956,8 +2955,8 @@ function payrollFigures(amounts, factor = 1) {
     roundMoney(roundMoney(amounts.transportAllowance) * share) +
     roundMoney(roundMoney(amounts.otherAllowance) * share)
   );
-  const ssnitEmployee = roundMoney(basic * 0.055);
-  const ssnitEmployer = roundMoney(basic * 0.13);
+  const ssnitEmployee = roundMoney(basic * state.payrollTaxes.ssnitEmployeeRate / 100);
+  const ssnitEmployer = roundMoney(basic * state.payrollTaxes.ssnitEmployerRate / 100);
   const paye = computePaye(roundMoney(gross - ssnitEmployee));
   const net = roundMoney(gross - ssnitEmployee - paye - roundMoney(amounts.otherDeductions));
   return { gross, ssnitEmployee, ssnitEmployer, paye, net };
@@ -2999,6 +2998,7 @@ function renderPayrollRuns() {
     row.append(el('td', 'num', money(run.totals.gross)));
     row.append(el('td', 'num', money(run.totals.ssnitEmployee)));
     row.append(el('td', 'num', money(run.totals.paye)));
+    row.append(el('td', 'num', money(run.totals.otherDeductions)));
     row.append(el('td', 'num', money(run.totals.net)));
     const status = el('td');
     status.append(payrollStatusPill(run.status));
@@ -3075,8 +3075,8 @@ function renderPayrollRun(run) {
   const tiles = [
     ['Staff paid', String(run.totals.staffCount)],
     ['Gross pay', money(run.totals.gross)],
-    ['SSNIT employee 5.5%', money(run.totals.ssnitEmployee)],
-    ['SSNIT employer 13%', money(run.totals.ssnitEmployer)],
+    ['SSNIT employee', money(run.totals.ssnitEmployee)],
+    ['SSNIT employer', money(run.totals.ssnitEmployer)],
     ['PAYE', money(run.totals.paye)],
     ['Other deductions', money(run.totals.otherDeductions)],
     ['Net pay', money(run.totals.net)],
@@ -3339,7 +3339,7 @@ function updatePayslipPreview() {
     ? `Paid for ${item.paidDays} of ${item.periodDays} days · `
     : '';
   $('payslip-preview').textContent =
-    `${paidText}Gross ${money(figures.gross)} · SSNIT ${money(figures.ssnitEmployee)} · PAYE ${money(figures.paye)} · Net ${money(figures.net)}`;
+    `${paidText}Gross ${money(figures.gross)} · SSNIT ${money(figures.ssnitEmployee)} · PAYE ${money(figures.paye)} · Other deductions ${money(figures.gross - figures.ssnitEmployee - figures.paye - figures.net)} · Net ${money(figures.net)}`;
 }
 
 function openPayslipEditor(item) {
@@ -3554,7 +3554,7 @@ function renderPayslip(data) {
     ['Gross pay', money(item.gross), true],
   ]));
   const deductions = [
-    ['SSNIT employee (5.5%)', item.ssnitEmployee],
+    ['SSNIT employee', item.ssnitEmployee],
     ['PAYE', item.paye],
     ['Other deductions', item.otherDeductions],
   ];
@@ -3569,7 +3569,7 @@ function renderPayslip(data) {
   net.append(el('span', null, 'Net pay'));
   net.append(el('strong', null, money(item.net)));
 
-  const footParts = [`Employer SSNIT contribution (13%): ${money(item.ssnitEmployer)}`];
+  const footParts = [`Employer SSNIT contribution: ${money(item.ssnitEmployer)}`];
   if (item.periodDays && item.paidDays < item.periodDays) {
     footParts.push(`Basic and allowances prorated to ${item.paidDays} of ${item.periodDays} working days`);
   }
@@ -4386,13 +4386,98 @@ function backupLabel(name) {
 }
 
 async function loadAdminView() {
-  const [backups, users] = await Promise.all([api('/api/admin/backups'), api('/api/users')]);
+  const [backups, users, taxData] = await Promise.all([
+    api('/api/admin/backups'),
+    api('/api/users'),
+    api('/api/payroll/taxes'),
+  ]);
   state.backups = backups.backups;
   state.users = users.users;
+  state.payrollTaxes = taxData.taxes;
   renderBackups();
   renderAdminRoles();
   renderAdminBranding();
+  renderPayrollTaxes();
 }
+
+function renderPayrollTaxes() {
+  const taxes = state.payrollTaxes;
+  payrollTaxesForm.elements.ssnitEmployeeRate.value = String(taxes.ssnitEmployeeRate);
+  payrollTaxesForm.elements.ssnitEmployerRate.value = String(taxes.ssnitEmployerRate);
+  const body = $('payroll-taxes-body');
+  body.replaceChildren();
+
+  taxes.payeBands.forEach((band, index) => {
+    const row = document.createElement('tr');
+    row.append(el('td', 'num', String(index + 1)));
+    const widthCell = el('td');
+    if (band.width === null) {
+      widthCell.append(el('span', 'muted', 'No limit'));
+    } else {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.min = '0.01';
+      input.max = '1000000000';
+      input.step = '0.01';
+      input.value = String(band.width);
+      input.dataset.bandWidth = String(index);
+      input.setAttribute('aria-label', `PAYE band ${index + 1} width`);
+      widthCell.append(input);
+    }
+    row.append(widthCell);
+    const rateCell = el('td');
+    const rate = document.createElement('input');
+    rate.type = 'number';
+    rate.min = '0';
+    rate.max = '100';
+    rate.step = '0.01';
+    rate.value = String(band.rate);
+    rate.dataset.bandRate = String(index);
+    rate.setAttribute('aria-label', `PAYE band ${index + 1} rate`);
+    rateCell.append(rate);
+    row.append(rateCell);
+    body.append(row);
+  });
+
+  hideFormError(payrollTaxesError);
+  payrollTaxesStatus.textContent = 'Saved settings apply to new payroll runs. Draft runs are recalculated when you save; approved runs keep their existing figures.';
+}
+
+payrollTaxesForm.addEventListener('input', (event) => {
+  if (event.target.matches('input')) markInvalid(event.target, false);
+  hideFormError(payrollTaxesError);
+});
+
+payrollTaxesForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  hideFormError(payrollTaxesError);
+  const payeBands = state.payrollTaxes.payeBands.map((band, index) => ({
+    width: index === state.payrollTaxes.payeBands.length - 1
+      ? null
+      : document.querySelector(`[data-band-width="${index}"]`).value,
+    rate: document.querySelector(`[data-band-rate="${index}"]`).value,
+  }));
+  const payload = {
+    ssnitEmployeeRate: payrollTaxesForm.elements.ssnitEmployeeRate.value,
+    ssnitEmployerRate: payrollTaxesForm.elements.ssnitEmployerRate.value,
+    payeBands,
+  };
+
+  setBusy(payrollTaxesSubmit, true, 'Save tax settings', 'Saving…');
+  try {
+    const data = await api('/api/payroll/taxes', jsonRequest('PUT', payload));
+    state.payrollTaxes = data.taxes;
+    renderPayrollTaxes();
+    if (state.payrollRunId) await loadPayrollView();
+    payrollTaxesStatus.textContent = `Saved. ${data.recalculatedItems} draft ${plural(data.recalculatedItems, 'payslip was', 'payslips were')} recalculated. Approved runs were not changed.`;
+    toast('Payroll tax settings saved.');
+  } catch (err) {
+    if (err.status === 401) return;
+    showFormError(payrollTaxesError, err.message);
+  } finally {
+    setBusy(payrollTaxesSubmit, false, 'Save tax settings', 'Saving…');
+  }
+});
 
 function renderAdminBranding() {
   $('admin-company-name').textContent = $('brand-company-name').textContent;
@@ -4538,7 +4623,7 @@ companyForm.addEventListener('submit', async (event) => {
   }
 });
 
-$('admin-logo-btn').addEventListener('click', () => $('replace-logo-btn').click());
+$('admin-logo-btn').addEventListener('click', openLogoDialog);
 
 /* ---------- Form helpers ---------- */
 
@@ -4709,13 +4794,13 @@ brandCompanyInput.addEventListener('blur', () => {
 
 /* ---------- Logo and password ---------- */
 
-$('replace-logo-btn').addEventListener('click', () => {
+function openLogoDialog() {
   setMenu(false);
   logoForm.reset();
   hideFormError(logoError);
   logoPreview.src = `/api/logo?v=${Date.now()}`;
   logoDialog.showModal();
-});
+}
 
 function validateLogoFile(file) {
   if (!file) return 'Choose an image first.';
@@ -4832,11 +4917,13 @@ $('logout-btn').addEventListener('click', async () => {
 
 (async function init() {
   try {
-    const [me, branding] = await Promise.all([
+    const [me, branding, taxData] = await Promise.all([
       api('/api/me'),
       api('/api/branding').catch(() => ({})),
+      api('/api/payroll/taxes'),
     ]);
     state.user = me.user;
+    state.payrollTaxes = taxData.taxes;
     renderUser(me.user);
     renderCompanyName(branding.companyName);
     setTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light', false);

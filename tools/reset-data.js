@@ -33,7 +33,7 @@ db.exec('PRAGMA foreign_keys = ON');
 
 const count = (table) => Number(db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n);
 const before = Object.fromEntries(TABLES.map((table) => [table, count(table)]));
-const otherUsers = Number(db.prepare("SELECT COUNT(*) AS n FROM users WHERE username <> 'admin'").get().n);
+const otherUsers = Number(db.prepare("SELECT COUNT(*) AS n FROM users WHERE role <> 'admin'").get().n);
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 rl.question(
@@ -56,8 +56,8 @@ rl.question(
     db.exec('BEGIN IMMEDIATE');
     try {
       for (const table of TABLES) db.prepare(`DELETE FROM ${table}`).run();
-      db.prepare("DELETE FROM users WHERE username <> 'admin'").run();
-      db.prepare("UPDATE users SET active = 1 WHERE username = 'admin'").run();
+      db.prepare("DELETE FROM users WHERE role <> 'admin'").run();
+      db.prepare("UPDATE users SET active = 1 WHERE role = 'admin'").run();
       db.prepare(
         `DELETE FROM sqlite_sequence WHERE name IN (${TABLES.map(() => '?').join(', ')}, 'users')`
       ).run(...TABLES);
@@ -72,6 +72,6 @@ rl.question(
       console.log(`  ${table.padEnd(22)} ${before[table]} -> ${count(table)}`);
     }
     console.log(`  ${'other accounts'.padEnd(22)} ${otherUsers} -> 0`);
-    console.log('\nAdmin account kept. You can sign in as admin / Admin@123.');
+    console.log('\nAdministrator accounts kept. Use the username and password you created during setup.');
   }
 );

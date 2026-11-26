@@ -168,7 +168,6 @@
                 <span id="menu-role"></span>
               </div>
               <button type="button" role="menuitem" id="change-password-btn">Change password</button>
-              <button type="button" role="menuitem" id="replace-logo-btn">Replace logo</button>
               <button type="button" role="menuitem" class="danger" id="logout-btn">Sign out</button>
             </div>
           </div>
@@ -266,41 +265,92 @@
             </article>
           </div>
 
-          <section class="panel" aria-labelledby="directory-title">
-            <div class="panel-head">
-              <div>
-                <h2 id="directory-title">Staff directory</h2>
-                <p class="panel-sub" id="staff-count">&nbsp;</p>
+          <section class="dashboard-summary-grid" aria-label="HR summaries">
+            <article class="panel summary-card" aria-labelledby="summary-workforce-title">
+              <div class="panel-head">
+                <div>
+                  <h2 id="summary-workforce-title">Workforce mix</h2>
+                  <p class="panel-sub">Active staff by department</p>
+                </div>
+                <a class="summary-link" href="/employees" data-route>View staff</a>
               </div>
-              <label class="search">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7"></circle>
-                  <path d="m20 20-3.5-3.5"></path>
-                </svg>
-                <input id="staff-search" type="search" placeholder="Search name, ID or department" aria-label="Search staff" autocomplete="off">
-              </label>
-            </div>
+              <div class="summary-card-body">
+                <div class="department-mix" id="summary-workforce-list"></div>
+                <p class="summary-empty" id="summary-workforce-empty" hidden>No active staff yet.</p>
+              </div>
+              <p class="panel-note" id="summary-workforce-foot">&nbsp;</p>
+            </article>
 
-            <div class="table-wrap">
-              <table class="staff-table" id="staff-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Staff ID</th>
-                    <th scope="col">Name</th>
-                    <th scope="col">Department</th>
-                    <th scope="col">Position</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Joined</th>
-                  </tr>
-                </thead>
-                <tbody id="staff-body"></tbody>
-              </table>
-            </div>
+            <article class="panel summary-card" aria-labelledby="summary-leave-title" data-non-nurse>
+              <div class="panel-head">
+                <div>
+                  <h2 id="summary-leave-title">Leave overview</h2>
+                  <p class="panel-sub" id="summary-leave-year">Current year</p>
+                </div>
+                <a class="summary-link" href="/leave" data-route>Open leave</a>
+              </div>
+              <div class="summary-card-body">
+                <p class="summary-empty" id="summary-leave-empty" hidden>No leave activity this year.</p>
+                <div id="summary-leave-content">
+                  <div class="summary-feature">
+                    <span>Awaiting approval</span>
+                    <strong id="summary-leave-pending">0</strong>
+                  </div>
+                  <dl class="summary-stat-grid">
+                    <div>
+                      <dt>Awaiting head</dt>
+                      <dd id="summary-leave-head">0</dd>
+                    </div>
+                    <div>
+                      <dt>Awaiting HR</dt>
+                      <dd id="summary-leave-hr">0</dd>
+                    </div>
+                    <div>
+                      <dt>Approved</dt>
+                      <dd id="summary-leave-approved">0</dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+              <p class="panel-note" id="summary-leave-today">&nbsp;</p>
+            </article>
 
-            <div class="empty" id="staff-empty" hidden>
-              <p id="empty-message">No staff records yet.</p>
-              <button class="btn btn-quiet" type="button" id="empty-action" hidden>Clear search</button>
-            </div>
+            <article class="panel summary-card" aria-labelledby="summary-payroll-title" data-non-nurse>
+              <div class="panel-head">
+                <div>
+                  <h2 id="summary-payroll-title">Latest payroll</h2>
+                  <p class="panel-sub" id="summary-payroll-period">No payroll yet</p>
+                </div>
+                <a class="summary-link" href="/payroll" data-route>Open payroll</a>
+              </div>
+              <div class="summary-card-body">
+                <p class="summary-empty" id="summary-payroll-empty" hidden>No payroll runs yet.</p>
+                <div id="summary-payroll-content" hidden>
+                  <div class="summary-feature">
+                    <div class="summary-feature-line">
+                      <span>Net pay</span>
+                      <span id="summary-payroll-status"></span>
+                    </div>
+                    <strong id="summary-payroll-net">—</strong>
+                  </div>
+                  <dl class="summary-stat-grid">
+                    <div>
+                      <dt>Staff paid</dt>
+                      <dd id="summary-payroll-staff">0</dd>
+                    </div>
+                    <div>
+                      <dt>Gross pay</dt>
+                      <dd id="summary-payroll-gross">—</dd>
+                    </div>
+                    <div>
+                      <dt>Deductions</dt>
+                      <dd id="summary-payroll-deductions">—</dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+              <p class="panel-note" id="summary-payroll-note">&nbsp;</p>
+            </article>
           </section>
         </section>
 
@@ -679,8 +729,9 @@
                     <th scope="col">Period</th>
                     <th scope="col" class="num">Staff</th>
                     <th scope="col" class="num">Gross</th>
-                    <th scope="col" class="num">SSNIT 5.5%</th>
+                    <th scope="col" class="num">SSNIT employee</th>
                     <th scope="col" class="num">PAYE</th>
+                    <th scope="col" class="num">Other deductions</th>
                     <th scope="col" class="num">Net pay</th>
                     <th scope="col">Status</th>
                     <th scope="col" class="actions-col">Actions</th>
@@ -722,9 +773,9 @@
                     <th scope="col" class="num">Basic</th>
                     <th scope="col" class="num">Allowances</th>
                     <th scope="col" class="num">Gross</th>
-                    <th scope="col" class="num">SSNIT 5.5%</th>
+                    <th scope="col" class="num">SSNIT employee</th>
                     <th scope="col" class="num">PAYE</th>
-                    <th scope="col" class="num">Other ded.</th>
+                    <th scope="col" class="num">Other deductions</th>
                     <th scope="col" class="num">Net pay</th>
                     <th scope="col" class="actions-col">Actions</th>
                   </tr>
@@ -940,6 +991,45 @@
               </p>
             </section>
           </div>
+
+          <section class="panel payroll-taxes-panel" aria-labelledby="payroll-taxes-title">
+            <div class="panel-head">
+              <div>
+                <h2 id="payroll-taxes-title">Payroll taxes</h2>
+                <p class="panel-sub">Edit SSNIT rates and the progressive monthly PAYE bands.</p>
+              </div>
+            </div>
+            <form id="payroll-taxes-form" novalidate>
+              <div class="form-grid">
+                <label class="field">
+                  <span>Employee SSNIT rate (%)</span>
+                  <input name="ssnitEmployeeRate" type="number" min="0" max="100" step="0.01" required>
+                </label>
+                <label class="field">
+                  <span>Employer SSNIT rate (%)</span>
+                  <input name="ssnitEmployerRate" type="number" min="0" max="100" step="0.01" required>
+                </label>
+              </div>
+
+              <p class="form-section-label">PAYE bands</p>
+              <div class="table-wrap">
+                <table class="staff-table tax-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" class="num">Band</th>
+                      <th scope="col">Monthly width (GHS)</th>
+                      <th scope="col">Rate (%)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="payroll-taxes-body"></tbody>
+                </table>
+              </div>
+              <p class="hint">Each width is the amount of taxable income charged at that band’s rate. The final band has no upper limit.</p>
+              <p class="panel-note" id="payroll-taxes-status"></p>
+              <p class="form-error" id="payroll-taxes-error" role="alert" hidden></p>
+              <button class="btn btn-primary" type="submit" id="payroll-taxes-submit">Save tax settings</button>
+            </form>
+          </section>
         </section>
       </main>
     </div>
@@ -1143,7 +1233,7 @@
             <em class="computed" id="gross-display">Gross —</em>
           </label>
         </div>
-        <p class="hint">Payroll runs include active staff with a basic salary. SSNIT (5.5% employee, 13% employer) and PAYE are calculated on each run.</p>
+        <p class="hint">Payroll runs include active staff with a basic salary. Current SSNIT and PAYE rates are managed by an administrator on the Admin page.</p>
       </div>
 
       <div class="tab-pane" data-pane="family" hidden>

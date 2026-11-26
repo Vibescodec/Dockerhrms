@@ -14,8 +14,14 @@
       <img class="login-logo" src="/api/logo" alt="Docker HRMS logo">
       <h1 id="login-title">Sign in</h1>
       <p class="login-sub" id="login-company">Docker HRMS</p>
+      <p class="muted" id="login-mode-copy" hidden>Create the first administrator account to continue.</p>
 
       <form id="login-form" novalidate>
+        <label class="field" id="display-name-field" hidden>
+          <span>Full name</span>
+          <input id="display-name" name="displayName" type="text" autocomplete="name" maxlength="80" required>
+        </label>
+
         <label class="field" id="username-field">
           <span>Username</span>
           <input id="username" name="username" type="text" autocomplete="username" spellcheck="false" required autofocus>
@@ -38,6 +44,11 @@
               </svg>
             </button>
           </div>
+        </label>
+
+        <label class="field" id="confirm-password-field" hidden>
+          <span>Confirm password</span>
+          <input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" required>
         </label>
 
         <p class="form-error" id="login-error" role="alert" hidden></p>

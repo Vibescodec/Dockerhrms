@@ -268,12 +268,8 @@ const TRAINING_TITLES = [
   'Time management', 'Anti-harassment', 'Cybersecurity awareness', 'Emergency evacuation',
 ];
 
-let adminCreated = false;
-
-if (db.prepare('SELECT COUNT(*) AS c FROM users').get().c === 0) {
-  db.prepare('INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)')
-    .run('admin', hashPassword('Admin@123'), 'System Administrator', 'admin');
-  adminCreated = true;
+function hasAdminAccount() {
+  return Boolean(db.prepare("SELECT 1 FROM users WHERE role = 'admin' LIMIT 1").get());
 }
 
 if (!getSetting('seeded')) {
@@ -377,6 +373,8 @@ function migrateSchema() {
   for (const column of ['department', 'position', 'bank_name', 'bank_branch', 'account_name', 'account_number', 'ssnit_number']) {
     ensureColumn('payroll_items', column, 'TEXT');
   }
+  ensureColumn('payroll_items', 'other_deductions', 'REAL NOT NULL DEFAULT 0');
+  ensureColumn('payroll_items', 'other_deduction_note', 'TEXT');
 
   for (const column of ['period_days', 'employed_days', 'paid_days', 'monthly_basic', 'monthly_housing', 'monthly_transport', 'monthly_other']) {
     ensureColumn('payroll_items', column, 'REAL NOT NULL DEFAULT 0');
@@ -2162,7 +2160,71 @@ function handleDeleteReminder(req, res, id) {
   sendJson(res, 200, { ok: true });
 }
 
+function handleSetupStatus(req, res) {
+  sendJson(res, 200, { setupRequired: !hasAdminAccount() });
+}
+
+async function handleSetup(req, res) {
+  if (hasAdminAccount()) {
+    return sendJson(res, 409, { error: 'Administrator setup is already complete.' });
+  }
+
+  const body = await readJson(req);
+  const username = String(body.username || '').trim().toLowerCase();
+  const displayName = String(body.displayName || '').trim();
+  const password = String(body.password || '');
+
+  if (!/^[a-z0-9._-]{3,40}$/.test(username)) {
+    return sendJson(res, 400, { error: 'Username must be 3–40 characters: letters, numbers, dots, dashes or underscores.' });
+  }
+  if (!displayName || displayName.length > 80) {
+    return sendJson(res, 400, { error: 'Enter the administrator’s name (80 characters max).' });
+  }
+  const problem = passwordProblem(password);
+  if (problem) return sendJson(res, 400, { error: problem });
+  if (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) {
+    return sendJson(res, 409, { error: 'That username is already taken.' });
+  }
+
+  const passwordHash = hashPassword(password);
+  let user;
+  let token;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    if (hasAdminAccount()) {
+      db.exec('ROLLBACK');
+      return sendJson(res, 409, { error: 'Administrator setup is already complete.' });
+    }
+    if (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) {
+      db.exec('ROLLBACK');
+      return sendJson(res, 409, { error: 'That username is already taken.' });
+    }
+    const result = db.prepare(
+      'INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)'
+    ).run(username, passwordHash, displayName, 'admin');
+    user = {
+      id: Number(result.lastInsertRowid),
+      username,
+      displayName,
+      role: 'admin',
+      employeeId: null,
+    };
+    token = createSession(user.id);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+
+  res.setHeader('Set-Cookie', sessionCookie(token));
+  sendJson(res, 201, { user });
+}
+
 async function handleLogin(req, res) {
+  if (!hasAdminAccount()) {
+    return sendJson(res, 409, { error: 'Create the administrator account first.', setupRequired: true });
+  }
+
   const body = await readJson(req);
   const username = String(body.username || '').trim();
   const password = String(body.password || '');
@@ -2224,11 +2286,118 @@ function handleMe(req, res) {
   });
 }
 
-function handleDashboard(req, res, url) {
+function handleDashboard(req, res) {
   const user = requireUser(req, res);
   if (!user) return;
-  const employees = employeesPayload(listEmployees(url.searchParams.get('q') || ''));
-  sendJson(res, 200, { stats: dashboardStats(), employees, attention: dashboardAttention() });
+  sendJson(res, 200, {
+    stats: dashboardStats(),
+    attention: dashboardAttention(),
+    summary: dashboardSummary(user),
+  });
+}
+
+function dashboardWorkforceSummary() {
+  const groups = db.prepare(
+    `SELECT department, COUNT(*) AS count FROM employees
+      WHERE status = 'Active'
+      GROUP BY department
+      ORDER BY count DESC, department COLLATE NOCASE ASC`
+  ).all().map((row) => ({ department: row.department, count: Number(row.count) }));
+  const departments = groups.slice(0, 4);
+  const remaining = groups.slice(4);
+  if (remaining.length) {
+    departments.push({
+      department: `Other departments (${remaining.length})`,
+      count: remaining.reduce((sum, row) => sum + row.count, 0),
+    });
+  }
+
+  const today = todayIso();
+  const contractHorizon = toIsoDate(new Date(Date.now() + 60 * 86400000));
+  const expatriates = db.prepare(
+    "SELECT COUNT(*) AS count FROM employees WHERE status = 'Active' AND is_expatriate = 1"
+  ).get().count;
+  const contractsEndingSoon = db.prepare(
+    `SELECT COUNT(*) AS count FROM employees
+      WHERE status = 'Active' AND employment_type = 'Contract'
+        AND contract_end BETWEEN ? AND ?`
+  ).get(today, contractHorizon).count;
+
+  return {
+    active: groups.reduce((sum, row) => sum + row.count, 0),
+    departments,
+    expatriates: Number(expatriates),
+    contractsEndingSoon: Number(contractsEndingSoon),
+  };
+}
+
+function dashboardLeaveSummary() {
+  const today = todayIso();
+  const year = today.slice(0, 4);
+  const totals = db.prepare(
+    `SELECT COALESCE(SUM(CASE WHEN l.status = 'Pending head' THEN 1 ELSE 0 END), 0) AS pending_head,
+            COALESCE(SUM(CASE WHEN l.status = 'Pending HR' THEN 1 ELSE 0 END), 0) AS pending_hr,
+            COALESCE(SUM(CASE WHEN l.status = 'Approved' AND substr(l.start_on, 1, 4) = ?
+                               THEN 1 ELSE 0 END), 0) AS approved_year
+       FROM leave_requests l
+       JOIN employees e ON e.id = l.employee_id
+      WHERE e.status = 'Active'`
+  ).get(year);
+  const onLeave = db.prepare(
+    `SELECT COUNT(DISTINCT l.employee_id) AS count
+       FROM leave_requests l
+       JOIN employees e ON e.id = l.employee_id
+      WHERE e.status = 'Active' AND l.status = 'Approved'
+        AND l.start_on <= ? AND l.end_on >= ?`
+  ).get(today, today).count;
+  const pendingHead = Number(totals.pending_head);
+  const pendingHr = Number(totals.pending_hr);
+
+  return {
+    year: Number(year),
+    pending: pendingHead + pendingHr,
+    pendingHead,
+    pendingHr,
+    approvedYear: Number(totals.approved_year),
+    onLeaveToday: Number(onLeave),
+  };
+}
+
+function dashboardPayrollSummary() {
+  const row = db.prepare(
+    `SELECT r.id, r.period, r.status, r.created_at, r.approved_at,
+            COUNT(i.id) AS staff_count,
+            COALESCE(SUM(i.gross), 0) AS gross,
+            COALESCE(SUM(i.ssnit_employee), 0) AS ssnit_employee,
+            COALESCE(SUM(i.ssnit_employer), 0) AS ssnit_employer,
+            COALESCE(SUM(i.paye), 0) AS paye,
+            COALESCE(SUM(i.other_deductions), 0) AS other_deductions,
+            COALESCE(SUM(i.net), 0) AS net
+       FROM payroll_runs r
+       LEFT JOIN payroll_items i ON i.run_id = r.id
+      GROUP BY r.id
+      ORDER BY r.period DESC, r.id DESC
+      LIMIT 1`
+  ).get();
+  if (!row) return null;
+  const run = payrollRunSummary(row);
+  const activeWithoutSalary = db.prepare(
+    "SELECT COUNT(*) AS count FROM employees WHERE status = 'Active' AND COALESCE(basic_salary, 0) <= 0"
+  ).get().count;
+  return {
+    ...run,
+    deductions: round2(run.totals.gross - run.totals.net),
+    activeWithoutSalary: Number(activeWithoutSalary),
+  };
+}
+
+function dashboardSummary(user) {
+  const summary = { workforce: dashboardWorkforceSummary() };
+  if (user.role !== 'nurse') {
+    summary.leave = dashboardLeaveSummary();
+    summary.payroll = dashboardPayrollSummary();
+  }
+  return summary;
 }
 
 function dashboardAttention() {
@@ -2236,6 +2405,7 @@ function dashboardAttention() {
   const expat = expatriatePayload();
   return {
     birthdays: reminders.birthdays.filter((item) => item.days <= 7).length,
+    expatriates: Number(expat.stats.total),
     expiringPermits: expat.stats.expiringPermits,
     expiredDocuments: expat.stats.expiredDocuments,
     openTasks: reminders.tasks.filter((task) => !task.done).length,
@@ -3184,16 +3354,79 @@ async function handleRejectLeave(req, res, id) {
   sendJson(res, 200, { request: leaveRequestPayload(leaveRequestRow(id)) });
 }
 
-// GRA monthly PAYE bands (2024 annual bands divided by 12).
-const PAYE_BANDS = [
-  { width: 490, rate: 0 },
-  { width: 110, rate: 0.05 },
-  { width: 130, rate: 0.1 },
-  { width: 3166.67, rate: 0.175 },
-  { width: 16000, rate: 0.25 },
-  { width: 30520, rate: 0.3 },
-  { width: Infinity, rate: 0.35 },
-];
+const DEFAULT_PAYROLL_TAXES = {
+  ssnitEmployeeRate: 5.5,
+  ssnitEmployerRate: 13,
+  payeBands: [
+    { width: 490, rate: 0 },
+    { width: 110, rate: 5 },
+    { width: 130, rate: 10 },
+    { width: 3166.67, rate: 17.5 },
+    { width: 16000, rate: 25 },
+    { width: 30520, rate: 30 },
+    { width: null, rate: 35 },
+  ],
+};
+
+function normalizePayrollTaxes(value) {
+  const input = value && typeof value === 'object' ? value : {};
+  const percent = (raw, label) => {
+    if (raw === '' || raw === null || raw === undefined) return { error: `Enter ${label}.` };
+    const number = Number(raw);
+    if (!Number.isFinite(number) || number < 0 || number > 100) {
+      return { error: `${label} must be between 0% and 100%.` };
+    }
+    return { value: number };
+  };
+
+  const employee = percent(input.ssnitEmployeeRate, 'the employee SSNIT rate');
+  if (employee.error) return { error: employee.error };
+  const employer = percent(input.ssnitEmployerRate, 'the employer SSNIT rate');
+  if (employer.error) return { error: employer.error };
+
+  if (!Array.isArray(input.payeBands) || input.payeBands.length < 1 || input.payeBands.length > 12) {
+    return { error: 'PAYE must have between 1 and 12 bands.' };
+  }
+  const payeBands = [];
+  for (let index = 0; index < input.payeBands.length; index += 1) {
+    const band = input.payeBands[index] || {};
+    const rate = percent(band.rate, `the PAYE rate for band ${index + 1}`);
+    if (rate.error) return { error: rate.error };
+    if (index === input.payeBands.length - 1) {
+      if (band.width !== null && band.width !== undefined && band.width !== '') {
+        return { error: 'The final PAYE band must have no upper limit.' };
+      }
+      payeBands.push({ width: null, rate: rate.value });
+      continue;
+    }
+    const width = Number(band.width);
+    if (!Number.isFinite(width) || width <= 0 || width > 1000000000) {
+      return { error: `PAYE band ${index + 1} must have a width greater than 0.` };
+    }
+    payeBands.push({ width, rate: rate.value });
+  }
+
+  return {
+    taxes: {
+      ssnitEmployeeRate: employee.value,
+      ssnitEmployerRate: employer.value,
+      payeBands,
+    },
+  };
+}
+
+function payrollTaxes() {
+  const saved = getSetting('payroll.taxes');
+  if (saved) {
+    try {
+      const normalized = normalizePayrollTaxes(JSON.parse(saved));
+      if (!normalized.error) return normalized.taxes;
+    } catch {
+      return DEFAULT_PAYROLL_TAXES;
+    }
+  }
+  return DEFAULT_PAYROLL_TAXES;
+}
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -3210,28 +3443,28 @@ function moneyText(value) {
   return `GH₵${MONEY_TEXT.format(Number(value) || 0)}`;
 }
 
-function computePaye(taxable) {
+function computePaye(taxable, bands = payrollTaxes().payeBands) {
   let remaining = Math.max(0, Number(taxable) || 0);
   let tax = 0;
-  for (const band of PAYE_BANDS) {
+  for (const band of bands) {
     if (remaining <= 0) break;
-    const slice = Math.min(remaining, band.width);
-    tax += slice * band.rate;
+    const slice = band.width === null ? remaining : Math.min(remaining, band.width);
+    tax += slice * band.rate / 100;
     remaining -= slice;
   }
   return round2(tax);
 }
 
-function payrollFigures(amounts, factor = 1) {
+function payrollFigures(amounts, factor = 1, taxes = payrollTaxes()) {
   const share = Number.isFinite(Number(factor)) ? Number(factor) : 1;
   const basic = round2(round2(amounts.basicSalary) * share);
   const gross = round2(
     basic + round2(round2(amounts.housingAllowance) * share) +
     round2(round2(amounts.transportAllowance) * share) + round2(round2(amounts.otherAllowance) * share)
   );
-  const ssnitEmployee = round2(basic * 0.055);
-  const ssnitEmployer = round2(basic * 0.13);
-  const paye = computePaye(round2(gross - ssnitEmployee));
+  const ssnitEmployee = round2(basic * taxes.ssnitEmployeeRate / 100);
+  const ssnitEmployer = round2(basic * taxes.ssnitEmployerRate / 100);
+  const paye = computePaye(round2(gross - ssnitEmployee), taxes.payeBands);
   const net = round2(gross - ssnitEmployee - paye - round2(amounts.otherDeductions));
   return { gross, ssnitEmployee, ssnitEmployer, paye, net };
 }
@@ -3393,6 +3626,74 @@ function handleListPayroll(req, res) {
   sendJson(res, 200, { runs: rows.map(payrollRunSummary) });
 }
 
+function handleGetPayrollTaxes(req, res) {
+  const user = requireUser(req, res);
+  if (!user) return;
+  sendJson(res, 200, { taxes: payrollTaxes() });
+}
+
+async function handleUpdatePayrollTaxes(req, res) {
+  const admin = requireAdmin(req, res);
+  if (!admin) return;
+
+  const body = await readJson(req);
+  const normalized = normalizePayrollTaxes(body);
+  if (normalized.error) return sendJson(res, 400, { error: normalized.error });
+  const taxes = normalized.taxes;
+  const draftItems = db.prepare(
+    `SELECT i.* FROM payroll_items i
+       JOIN payroll_runs r ON r.id = i.run_id
+      WHERE r.status = 'Draft'
+      ORDER BY i.id`
+  ).all();
+  const updates = draftItems.map((item) => {
+    const periodDays = Number(item.period_days) || 0;
+    const paidDays = Number(item.paid_days) || 0;
+    const factor = periodDays ? Math.min(1, paidDays / periodDays) : 1;
+    const monthly = {
+      basicSalary: Number(item.monthly_basic) || Number(item.basic_salary) || 0,
+      housingAllowance: Number(item.monthly_housing) || Number(item.housing_allowance) || 0,
+      transportAllowance: Number(item.monthly_transport) || Number(item.transport_allowance) || 0,
+      otherAllowance: Number(item.monthly_other) || Number(item.other_allowance) || 0,
+      otherDeductions: round2(item.other_deductions),
+    };
+    const figures = payrollFigures(monthly, factor, taxes);
+    return { item, factor, monthly, figures };
+  });
+  const invalid = updates.find(({ figures }) => figures.net < 0);
+  if (invalid) {
+    const available = round2(invalid.figures.gross - invalid.figures.ssnitEmployee - invalid.figures.paye);
+    return sendJson(res, 400, {
+      error: `New tax settings would make deductions exceed ${moneyText(available)} for ${invalid.item.full_name} (${invalid.item.staff_id}).`,
+    });
+  }
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    setSetting('payroll.taxes', JSON.stringify(taxes));
+    const update = db.prepare(
+      `UPDATE payroll_items
+          SET basic_salary = ?, housing_allowance = ?, transport_allowance = ?, other_allowance = ?,
+              gross = ?, ssnit_employee = ?, ssnit_employer = ?, paye = ?, net = ?
+        WHERE id = ?`
+    );
+    for (const { item, factor, monthly, figures } of updates) {
+      update.run(
+        round2(monthly.basicSalary * factor), round2(monthly.housingAllowance * factor),
+        round2(monthly.transportAllowance * factor), round2(monthly.otherAllowance * factor),
+        figures.gross, figures.ssnitEmployee, figures.ssnitEmployer, figures.paye, figures.net,
+        item.id
+      );
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+
+  sendJson(res, 200, { taxes, recalculatedItems: updates.length });
+}
+
 async function handleCreatePayrollRun(req, res) {
   const user = requireEditor(req, res);
   if (!user) return;
@@ -3452,6 +3753,7 @@ async function handleCreatePayrollRun(req, res) {
           monthly_other, proration_note)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
+    const taxes = payrollTaxes();
     for (const { row, proration } of payable) {
       const factor = proration.employedDays / proration.periodDays;
       const monthly = {
@@ -3461,7 +3763,7 @@ async function handleCreatePayrollRun(req, res) {
         otherAllowance: round2(row.other_allowance),
         otherDeductions: 0,
       };
-      const figures = payrollFigures(monthly, factor);
+      const figures = payrollFigures(monthly, factor, taxes);
       insert.run(
         runId, Number(row.id), row.staff_id, row.full_name,
         row.department || '', row.position || '',
@@ -3662,6 +3964,9 @@ function handleGetPayslip(req, res, id) {
 
 function nurseMayUse(method, pathname) {
   if (pathname === '/api/login' || pathname === '/api/logout' || pathname === '/api/me') return true;
+  if (pathname === '/api/setup-status' && method === 'GET') return true;
+  if (pathname === '/api/setup' && method === 'POST') return true;
+  if (pathname === '/api/payroll/taxes' && method === 'GET') return true;
   if (pathname === '/api/change-password') return true;
   if (pathname === '/api/branding' || pathname === '/api/logo') return method === 'GET';
   if (pathname === '/api/dashboard' || pathname === '/api/employees' || pathname === '/api/departments') {
@@ -3851,6 +4156,10 @@ async function handleApi(req, res, url) {
 
   const key = `${req.method} ${url.pathname}`;
   switch (key) {
+    case 'GET /api/setup-status':
+      return handleSetupStatus(req, res);
+    case 'POST /api/setup':
+      return handleSetup(req, res);
     case 'POST /api/login':
       return handleLogin(req, res);
     case 'POST /api/logout':
@@ -3889,6 +4198,10 @@ async function handleApi(req, res, url) {
       return handleCreateDepartment(req, res);
     case 'GET /api/bank':
       return handleListBank(req, res, url);
+    case 'GET /api/payroll/taxes':
+      return handleGetPayrollTaxes(req, res);
+    case 'PUT /api/payroll/taxes':
+      return handleUpdatePayrollTaxes(req, res);
     case 'GET /api/payroll':
       return handleListPayroll(req, res);
     case 'POST /api/payroll':
@@ -3941,6 +4254,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (pathname === '/') {
+    if (!hasAdminAccount()) return serveFile(res, path.join(PUBLIC_DIR, 'login.html'));
     if (sessionUser(req)) return redirect(res, '/app');
     return serveFile(res, path.join(PUBLIC_DIR, 'login.html'));
   }
@@ -3950,7 +4264,7 @@ const server = http.createServer((req, res) => {
     '/reports', '/reminders', '/departments', '/payroll', '/leave', '/bank-ssnit', '/users', '/admin',
   ]);
   if (appPages.has(pathname)) {
-    if (!sessionUser(req)) return redirect(res, '/');
+    if (!hasAdminAccount() || !sessionUser(req)) return redirect(res, '/');
     return serveFile(res, path.join(PUBLIC_DIR, 'app.html'));
   }
 
@@ -3981,9 +4295,6 @@ server.listen(PORT, HOST, () => {
         console.log(`On the network:  http://${nic.address}:${PORT}`);
       }
     }
-  }
-  if (adminCreated) {
-    console.log('First sign-in:  username  admin   password  Admin@123');
   }
   console.log('Press Ctrl+C to stop.');
   console.log('');
